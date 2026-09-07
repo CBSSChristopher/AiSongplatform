@@ -84,15 +84,23 @@ async function main() {
   });
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";
+  const publicApp = /^https:\/\//.test(appUrl) && !/localhost|127\.0\.0\.1/.test(appUrl);
   let webhookId = "";
-  try {
-    const webhook = await client.webhooks.create({
-      url: `${appUrl}/api/webhooks/whop`,
-      events: ["payment.succeeded"],
-    });
-    webhookId = webhook.id;
-  } catch (error) {
-    console.warn("Webhook create skipped (add it in the Whop dashboard if this failed):", error);
+  let webhookSecret = "";
+  if (!publicApp) {
+    console.warn(`Skipping webhook: APP_URL must be a public https URL (got ${appUrl}).`);
+  } else {
+    try {
+      const webhook = await client.webhooks.create({
+        url: `${appUrl}/api/webhooks/whop`,
+        events: ["payment.succeeded", "payment.failed"],
+        resource_id: accountId,
+      });
+      webhookId = webhook.id;
+      webhookSecret = webhook.webhook_secret || "";
+    } catch (error) {
+      console.warn("Webhook create skipped (I can add it after the app has a public URL):", error);
+    }
   }
 
   const saved = upsertEnv({
@@ -100,6 +108,7 @@ async function main() {
     WHOP_PLAN_ID_SONG: song.id,
     WHOP_PLAN_ID_BUNDLE: bundle.id,
     ...(webhookId ? { WHOP_WEBHOOK_ID: webhookId } : {}),
+    ...(webhookSecret ? { WHOP_WEBHOOK_SECRET: webhookSecret } : {}),
   });
 
   console.log(`Created Whop product ${product.id}`);
@@ -107,7 +116,7 @@ async function main() {
   console.log(`Bundle plan ${bundle.id} @ $${brand.songPrice + brand.lyricsPrice}`);
   if (webhookId) console.log(`Webhook ${webhookId} -> ${appUrl}/api/webhooks/whop`);
   console.log(`IDs written to ${saved}`);
-  console.log("Copy WHOP_WEBHOOK_SECRET from the Whop dashboard webhook row.");
+  if (!webhookSecret) console.log("Webhook secret will be saved automatically when a public APP_URL is set.");
 }
 
 main().catch((error) => {

@@ -62,34 +62,26 @@ Cheaper/faster: `ANTHROPIC_MODEL=claude-sonnet-5`. OpenAI and Groq still work. I
 
 ## Sync to your Whop account
 
-1. Create or open the company on [sandbox.whop.com](https://sandbox.whop.com) (test) or [whop.com](https://whop.com) (live).
-2. Developer → Company API key with product, plan, checkout, webhook, and payment read/create scopes.
-3. Copy the company id (`biz_...`) from the dashboard URL.
-4. Put them in `.env.local`:
+Use your existing [whop.com](https://whop.com) company. Sandbox is optional and not required.
+
+1. Dashboard → Developer → Company API keys → Create (Admin). Copy `apik_...`.
+2. Copy the company id (`biz_...`) from the dashboard URL.
+3. Put them in `.env.local` with the public site URL:
 
 ```
 WHOP_COMPANY_API_KEY=apik_...
 WHOP_COMPANY_ID=biz_...
-WHOP_SANDBOX=true
 APP_URL=https://your-deployed-domain.com
 ```
 
-5. Deploy or tunnel the app so Whop can reach `/api/webhooks/whop`.
-6. Run:
+4. Deploy so Whop can reach `/api/webhooks/whop`.
+5. Run:
 
 ```bash
 npm run sync:whop
 ```
 
-That creates:
-
-- Product: `{brand} personalized song`
-- Plan: Complete song at `$39`
-- Plan: Song + lyric print at `$58`
-- Webhook to `/api/webhooks/whop` for `payment.succeeded`
-
-7. Paste `WHOP_WEBHOOK_SECRET` from the webhook row in the Whop dashboard into `.env.local`.
-8. Set `WHOP_SANDBOX=false` and repeat on production when you are ready to take real money.
+That creates the Hearloom product, the `$39` song plan, the `$58` song+lyrics plan, and a webhook. The webhook signing secret is saved automatically when `APP_URL` is public https.
 
 Hearloom never stores cards. Whop handles checkout; the webhook unlocks the full recording.
 
