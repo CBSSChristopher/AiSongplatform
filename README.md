@@ -50,7 +50,26 @@ npm run dev
 
 Open http://localhost:3000. Create a song, hear the preview, then **Unlock full song (demo)**.
 
-Optional: set `OPENAI_API_KEY` in `.env.local` for stronger lyrics. Without it, Hearloom uses the built-in writer.
+Optional: add one lyric API key in `.env.local` for stronger lyrics. Without a key, Hearloom uses the built-in writer.
+
+```bash
+# OpenAI
+LYRIC_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+
+# Anthropic
+LYRIC_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-4-5
+
+# Groq
+LYRIC_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+Pick one. Restart `npm run dev` after saving. If the key is missing or the API fails, Hearloom falls back to the template writer.
 
 ## Sync to your Whop account
 

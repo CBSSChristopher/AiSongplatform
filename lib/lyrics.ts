@@ -13,6 +13,20 @@ function clean(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+export type LyricProvider = "openai" | "anthropic" | "groq" | "template";
+
+export function resolveLyricProvider(): LyricProvider {
+  const forced = (process.env.LYRIC_PROVIDER || "").toLowerCase();
+  if (forced === "template") return "template";
+  if (forced === "openai" || forced === "anthropic" || forced === "groq") {
+    return forced;
+  }
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.GROQ_API_KEY) return "groq";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  return "template";
+}
+
 export function draftLyrics(job: SongJob): string {
   const name = clean(job.recipientName) || "you";
   const who = labelFor(relationships, job.relationship, "someone I love");
@@ -57,14 +71,8 @@ export function draftLyrics(job: SongJob): string {
     .trim();
 }
 
-export async function generateLyrics(job: SongJob): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-
-  if (!apiKey) return draftLyrics(job);
-
-  const prompt = [
+function lyricPrompt(job: SongJob) {
+  return [
     "Write original song lyrics for a personalized gift.",
     "Use the details below. Do not invent last names, medical facts, or tragedies.",
     "Keep it warm, specific, and singable. English only.",
@@ -79,33 +87,115 @@ export async function generateLyrics(job: SongJob): Promise<string> {
     `Message: ${job.message || "none given"}`,
     `From: ${job.senderName || "unsigned"}`,
   ].join("\n");
+}
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+const systemPrompt = "You write short, personal gift-song lyrics. No copyrighted songs.";
+
+async function generateOpenAICompatible(options: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  prompt: string;
+}) {
+  const response = await fetch(`${options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${options.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model,
+      model: options.model,
       temperature: 0.8,
       messages: [
-        {
-          role: "system",
-          content: "You write short, personal gift-song lyrics. No copyrighted songs.",
-        },
-        { role: "user", content: prompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: options.prompt },
       ],
     }),
   });
 
   if (!response.ok) {
-    return draftLyrics(job);
+    const detail = await response.text();
+    throw new Error(`Lyric API ${response.status}: ${detail.slice(0, 300)}`);
   }
 
   const json = (await response.json()) as {
     choices?: { message?: { content?: string } }[];
   };
   const content = json.choices?.[0]?.message?.content?.trim();
-  return content || draftLyrics(job);
+  if (!content) throw new Error("Lyric API returned empty text.");
+  return content;
+}
+
+async function generateAnthropic(options: { apiKey: string; model: string; prompt: string }) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": options.apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: options.model,
+      max_tokens: 1200,
+      temperature: 0.8,
+      system: systemPrompt,
+      messages: [{ role: "user", content: options.prompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Anthropic ${response.status}: ${detail.slice(0, 300)}`);
+  }
+
+  const json = (await response.json()) as {
+    content?: { type?: string; text?: string }[];
+  };
+  const content = json.content?.find((block) => block.type === "text")?.text?.trim();
+  if (!content) throw new Error("Anthropic returned empty text.");
+  return content;
+}
+
+export async function generateLyrics(job: SongJob): Promise<string> {
+  const provider = resolveLyricProvider();
+  const prompt = lyricPrompt(job);
+
+  try {
+    if (provider === "openai") {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error("OPENAI_API_KEY is missing.");
+      return await generateOpenAICompatible({
+        apiKey,
+        baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        prompt,
+      });
+    }
+
+    if (provider === "groq") {
+      const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error("GROQ_API_KEY is missing.");
+      return await generateOpenAICompatible({
+        apiKey,
+        baseUrl: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
+        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        prompt,
+      });
+    }
+
+    if (provider === "anthropic") {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new Error("ANTHROPIC_API_KEY is missing.");
+      return await generateAnthropic({
+        apiKey,
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+        prompt,
+      });
+    }
+  } catch (error) {
+    console.error("[lyrics]", provider, error);
+    return draftLyrics(job);
+  }
+
+  return draftLyrics(job);
 }
