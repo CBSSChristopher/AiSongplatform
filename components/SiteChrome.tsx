@@ -27,6 +27,18 @@ export function SiteFooter() {
           {brand.name}. {brand.tagline}
         </p>
         <p>
+          <Link href="/privacy" className="hover:text-[var(--ink)]">
+            Privacy
+          </Link>
+          {" · "}
+          <Link href="/terms" className="hover:text-[var(--ink)]">
+            Terms
+          </Link>
+          {" · "}
+          <Link href="/refunds" className="hover:text-[var(--ink)]">
+            Refunds
+          </Link>
+          {" · "}
           <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>
         </p>
       </div>

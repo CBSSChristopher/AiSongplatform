@@ -52,7 +52,7 @@ export default function Home() {
               <li>1. Tell us who it&apos;s for — son, daughter, spouse, parent, friend.</li>
               <li>2. Approve the lyrics. Change any line.</li>
               <li>3. Hear a 45-second preview. Checkout stays closed until it plays.</li>
-              <li>4. Buy through Whop. We email the private listening page.</li>
+              <li>4. Pay once. Keep a private page to listen, download, and share.</li>
             </ol>
           </div>
         </section>
@@ -117,10 +117,18 @@ export default function Home() {
               </p>
             </div>
             <div>
+              <h3 className="font-semibold">What am I hearing?</h3>
+              <p className="mt-2 text-[var(--muted)]">
+                Today&apos;s preview is an original instrumental generated for the funnel. It is
+                not a human singer. Sung audio comes next, after checkout is live.
+              </p>
+            </div>
+            <div>
               <h3 className="font-semibold">When does it arrive?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                After payment, the full recording is released on a private page you can share.
-                Demo mode unlocks instantly so you can test before connecting Whop.
+                After payment, the full recording is released on a private page you can copy,
+                download, and email to yourself. A lyric print PDF is optional. Demo mode
+                unlocks instantly so you can test before connecting Whop.
               </p>
             </div>
           </div>

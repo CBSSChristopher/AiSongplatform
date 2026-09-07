@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { writeFullAudio } from "@/lib/music";
-import { getJob, publicJob, updateJob } from "@/lib/store";
+import { fulfillPaidJob } from "@/lib/fulfill";
+import { getJob, publicJob } from "@/lib/store";
 import { demoCheckoutEnabled } from "@/lib/whop";
 
 export async function POST(request: Request) {
@@ -13,13 +13,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Song not found." }, { status: 404 });
   }
 
-  await writeFullAudio(job);
-  const next = await updateJob(job.id, {
-    paidAt: new Date().toISOString(),
-    fullReady: true,
-    status: "delivered",
-    whopPaymentId: "demo",
-  });
-
-  return NextResponse.json({ job: next ? publicJob(next) : publicJob(job) });
+  const next = await fulfillPaidJob(job, "demo");
+  return NextResponse.json({ job: publicJob(next) });
 }

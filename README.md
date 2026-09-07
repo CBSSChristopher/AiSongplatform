@@ -83,7 +83,7 @@ npm run sync:whop
 
 That creates the Hearloom product, the `$39` song plan, the `$58` song+lyrics plan, and a webhook. The webhook signing secret is saved automatically when `APP_URL` is public https.
 
-Hearloom never stores cards. Whop handles checkout; the webhook unlocks the full recording.
+Hearloom never stores cards. Whop handles checkout; the webhook unlocks the full recording. The private page lets you listen, download, copy the link, and download a lyric PDF if that add-on was purchased.
 
 ## Production music
 

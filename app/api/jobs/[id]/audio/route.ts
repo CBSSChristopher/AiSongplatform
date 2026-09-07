@@ -25,10 +25,15 @@ export async function GET(
 
   try {
     const bytes = await readFile(audioPath(id, kind));
+    const download = url.searchParams.get("download") === "1";
+    const filename = `${job.recipientName || "hearloom"}-${kind}.wav`.replace(/[^\w.-]+/g, "-");
     return new NextResponse(Uint8Array.from(bytes), {
       headers: {
         "Content-Type": "audio/wav",
         "Cache-Control": "no-store",
+        ...(download
+          ? { "Content-Disposition": `attachment; filename="${filename}"` }
+          : {}),
       },
     });
   } catch {

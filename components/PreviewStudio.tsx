@@ -122,7 +122,9 @@ export function PreviewStudio({ id }: { id: string }) {
               onLoadedData={() => setCanHear(true)}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
-              45-second preview. The full song continues this same recording.
+              45-second instrumental preview so you can hear the shape of the song before you
+              pay. Sung vocals are not in this version yet. The full file continues the same
+              recording.
             </p>
             <button
               type="button"

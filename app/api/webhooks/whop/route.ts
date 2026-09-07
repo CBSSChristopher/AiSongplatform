@@ -1,6 +1,6 @@
 import { unwrapWebhook } from "@whop/sdk/helpers";
-import { writeFullAudio } from "@/lib/music";
-import { getJob, updateJob } from "@/lib/store";
+import { fulfillPaidJob } from "@/lib/fulfill";
+import { getJob } from "@/lib/store";
 
 type WhopEvent = {
   type?: string;
@@ -28,14 +28,8 @@ export async function POST(request: Request) {
     const jobId = String(event.data?.metadata?.job_id || "");
     if (jobId) {
       const job = await getJob(jobId);
-      if (job && !job.paidAt) {
-        await writeFullAudio(job);
-        await updateJob(job.id, {
-          paidAt: new Date().toISOString(),
-          fullReady: true,
-          status: "delivered",
-          whopPaymentId: event.data?.id || null,
-        });
+      if (job) {
+        await fulfillPaidJob(job, event.data?.id || null);
       }
     }
   }
