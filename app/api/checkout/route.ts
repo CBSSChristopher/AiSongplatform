@@ -39,25 +39,41 @@ export async function POST(request: Request) {
     );
   }
 
-  const whop = getWhop();
-  const checkout = await whop.checkoutConfigurations.create({
-    account_id: process.env.WHOP_COMPANY_ID,
-    plan_id: planId,
-    mode: "payment",
-    metadata: {
-      job_id: job.id,
-      include_lyric_print: includeLyricPrint,
-    },
-    redirect_url: `${appUrl()}/checkout/complete?job=${job.id}`,
-  });
+  try {
+    const redirect = appUrl();
+    const checkout = await getWhop().checkoutConfigurations.create({
+      account_id: process.env.WHOP_COMPANY_ID,
+      plan_id: planId,
+      mode: "payment",
+      metadata: {
+        job_id: job.id,
+        include_lyric_print: includeLyricPrint,
+      },
+      ...(redirect.startsWith("https://")
+        ? { redirect_url: `${redirect}/checkout/complete?job=${job.id}` }
+        : {}),
+    });
 
-  await updateJob(job.id, { checkoutSessionId: checkout.id });
+    await updateJob(job.id, { checkoutSessionId: checkout.id });
 
-  return NextResponse.json({
-    mode: "whop",
-    sessionId: checkout.id,
-    planId,
-    environment: process.env.WHOP_SANDBOX === "true" ? "sandbox" : "production",
-    job: next ? publicJob(next) : publicJob(job),
-  });
+    return NextResponse.json({
+      mode: "whop",
+      sessionId: checkout.id,
+      planId,
+      environment: process.env.WHOP_SANDBOX === "true" ? "sandbox" : "production",
+      job: next ? publicJob(next) : publicJob(job),
+    });
+  } catch (error) {
+    const message =
+      error && typeof error === "object" && "body" in error
+        ? JSON.stringify((error as { body?: unknown }).body)
+        : error instanceof Error
+          ? error.message
+          : "Whop checkout failed.";
+    console.error("[checkout]", message);
+    return NextResponse.json(
+      { error: "Whop checkout could not start. Check the API key permissions and try again." },
+      { status: 502 },
+    );
+  }
 }
