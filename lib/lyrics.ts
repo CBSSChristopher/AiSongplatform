@@ -72,24 +72,37 @@ export function draftLyrics(job: SongJob): string {
 }
 
 function lyricPrompt(job: SongJob) {
+  const genre = labelFor(genres, job.genre, "acoustic");
   return [
-    "Write original song lyrics for a personalized gift.",
-    "Use the details below. Do not invent last names, medical facts, or tragedies.",
-    "Keep it warm, specific, and singable. English only.",
-    "Structure: Verse 1, Chorus, Verse 2, Bridge, Final chorus.",
-    "Put the recipient first name in the chorus.",
-    `Recipient name: ${job.recipientName}`,
+    "Write original gift-song lyrics a family would play more than once.",
+    "Output lyrics only. No title, no commentary, no chord charts.",
+    "Structure exactly: Verse 1, Chorus, Verse 2, Bridge, Final chorus.",
+    "Craft rules:",
+    "- Put the recipient first name in the chorus. Use it naturally, not every line.",
+    "- Build verses from the supplied memory, qualities, and message. Specifics beat compliments.",
+    "- Do not invent last names, ages, cities, illnesses, deaths, or facts they did not give.",
+    "- If a detail is thin, write around the feeling they named. Do not pad with generic love-song clichés.",
+    "- Avoid: whole world brighter, you complete me, forever and always, you're my everything.",
+    "- Keep lines singable: roughly 6–12 words, conversational stress, rhyme that does not fight the story.",
+    "- Match the genre in diction and rhythm, not in gimmicks.",
+    "- Worship/faith: reverent, no sermon. Lullaby: softer, slower images. Country: plain speech. R&B/pop: intimate, not explicit.",
+    "- Final chorus can add one small lift, then land on the gift message.",
+    "- English only. No copyrighted lyrics or famous melodies described.",
+    "",
+    `Recipient name: ${job.recipientName || "not given"}`,
     `Relationship: ${labelFor(relationships, job.relationship, "loved one")}`,
     `Occasion: ${labelFor(occasions, job.occasion, "just because")}`,
-    `Genre: ${labelFor(genres, job.genre, "acoustic")}`,
+    `Genre: ${genre}`,
+    `Voice preference: ${job.voice || "any"}`,
     `Qualities: ${job.qualities || "none given"}`,
     `Memory: ${job.memories || "none given"}`,
-    `Message: ${job.message || "none given"}`,
+    `Message they want heard: ${job.message || "none given"}`,
     `From: ${job.senderName || "unsigned"}`,
   ].join("\n");
 }
 
-const systemPrompt = "You write short, personal gift-song lyrics. No copyrighted songs.";
+const systemPrompt =
+  "You are a gifted personal songwriter. You write original lyrics that sound like one specific person, not a greeting card. Never copy existing songs.";
 
 async function generateOpenAICompatible(options: {
   apiKey: string;
@@ -105,7 +118,7 @@ async function generateOpenAICompatible(options: {
     },
     body: JSON.stringify({
       model: options.model,
-      temperature: 0.8,
+      temperature: 0.7,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: options.prompt },
@@ -136,8 +149,7 @@ async function generateAnthropic(options: { apiKey: string; model: string; promp
     },
     body: JSON.stringify({
       model: options.model,
-      max_tokens: 1200,
-      temperature: 0.8,
+      max_tokens: 1600,
       system: systemPrompt,
       messages: [{ role: "user", content: options.prompt }],
     }),
@@ -188,7 +200,7 @@ export async function generateLyrics(job: SongJob): Promise<string> {
       if (!apiKey) throw new Error("ANTHROPIC_API_KEY is missing.");
       return await generateAnthropic({
         apiKey,
-        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+        model: process.env.ANTHROPIC_MODEL || "claude-opus-5",
         prompt,
       });
     }
