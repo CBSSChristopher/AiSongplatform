@@ -22,10 +22,28 @@ async function writeJobs(jobs: SongJob[]) {
 }
 
 export function publicJob(job: SongJob): PublicSongJob {
-  const rest = { ...job };
-  delete rest.whopPaymentId;
-  delete rest.checkoutSessionId;
-  return rest;
+  return {
+    id: job.id,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    status: job.status,
+    recipientName: job.recipientName,
+    relationship: job.relationship,
+    email: job.email,
+    marketingOptIn: job.marketingOptIn,
+    genre: job.genre,
+    voice: job.voice,
+    qualities: job.qualities,
+    memories: job.memories,
+    occasion: job.occasion,
+    senderName: job.senderName,
+    message: job.message,
+    lyrics: job.lyrics,
+    includeLyricPrint: job.includeLyricPrint,
+    previewReady: job.previewReady,
+    fullReady: job.fullReady,
+    paidAt: job.paidAt,
+  };
 }
 
 export async function createJob(partial: Partial<SongJob>): Promise<SongJob> {
