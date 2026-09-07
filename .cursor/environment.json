@@ -1,0 +1,20 @@
+{
+  "name": "AiSongPlatform",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "npm run dev:server",
+      "description": "Express API (port 3001) that generates lyrics and synthesizes the WAV music clip."
+    },
+    {
+      "name": "client",
+      "command": "npm run dev:client",
+      "description": "Vite + React dev server (port 5173) that proxies /api to the Express server."
+    }
+  ],
+  "ports": [
+    { "name": "client", "port": 5173 },
+    { "name": "api", "port": 3001 }
+  ]
+}
