@@ -7,9 +7,20 @@ export function SongDelivery({ job }: { job: PublicSongJob }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(window.location.href);
+    const url = window.location.href;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const input = document.createElement("input");
+      input.value = url;
+      input.setAttribute("readonly", "true");
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
   }
 
   const subject = encodeURIComponent(`Your Hearloom for ${job.recipientName}`);

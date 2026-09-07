@@ -8,7 +8,8 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
     "sync:whop": "tsx scripts/sync-whop.ts",
-    "test:lyrics": "tsx scripts/test-lyrics.ts"
+    "test:lyrics": "tsx scripts/test-lyrics.ts",
+    "test:pdf": "tsx scripts/test-pdf.ts"
   },
   "dependencies": {
     "@whop/checkout": "^0.6.0",
