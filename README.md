@@ -1,33 +1,25 @@
-# Hearloom
+# SongSnuggle
+
+Public site: [songsnuggle.com](https://songsnuggle.com) (Cloudflare).
 
 Personalized gift songs for families, milestones, and faith moments. Free preview, lyric approval, then a one-time Whop checkout.
 
 This is an original product that follows the same **listen-before-you-buy** pattern as other custom-song gifts. It is not a copy of another brand’s name, copy, or design.
 
-## Business names
+## Names
 
-Ship default: **Hearloom** (heirloom + hear). Easy to say in ads. Distinct from SongCuddle.
-
-Other names you and Joe can swap in with `NEXT_PUBLIC_BRAND_NAME`:
-
-| Name | Why it works |
+| Layer | Name |
 | --- | --- |
-| Hearloom | Keepsake. Memorable. Recommended. |
-| NamedHeart | Literal: their name, your feeling. |
-| Versekeep | Lyrics as the product. |
-| KinChorus | Family / kids / parents. |
-| Storytune | Memory-first. |
-| DearKeep | Soft gift tone. |
-| Hearthline | Home and faith adjacent. |
-| KeepAMelody | Clear promise. |
-| OurLittleSong | Kids / bedtime lane. |
-| ForeverNote | Higher-ticket memorial / anniversary. |
+| Public brand / domain | **SongSnuggle** (`songsnuggle.com`) |
+| Repo / package / code | Hearloom |
 
-Change the brand without a rewrite:
+Change the public label without a rewrite:
 
 ```bash
-NEXT_PUBLIC_BRAND_NAME=KinChorus
-NEXT_PUBLIC_BRAND_TAGLINE=A song your family can keep.
+NEXT_PUBLIC_BRAND_NAME=SongSnuggle
+NEXT_PUBLIC_BRAND_TAGLINE=A song they can keep.
+NEXT_PUBLIC_SUPPORT_EMAIL=hello@songsnuggle.com
+APP_URL=https://songsnuggle.com
 ```
 
 ## What you get
@@ -38,7 +30,7 @@ NEXT_PUBLIC_BRAND_TAGLINE=A song your family can keep.
 - Checkout stays closed until the preview can play
 - Honest AI disclosure
 - Demo mode so you can test the whole funnel before Whop keys exist
-- `npm run sync:whop` to create the product + plans on your Whop account
+- `npm run sync:whop` to create or update the product + plans on your Whop account
 
 ## Local demo
 
@@ -58,7 +50,30 @@ ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_MODEL=claude-opus-5
 ```
 
-Cheaper/faster: `ANTHROPIC_MODEL=claude-sonnet-5`. OpenAI and Groq still work. If no key is set, Hearloom uses the built-in template.
+Cheaper/faster: `ANTHROPIC_MODEL=claude-sonnet-5`. OpenAI and Groq still work. If no key is set, SongSnuggle uses the built-in template.
+
+## Go live on songsnuggle.com
+
+The domain is already on Cloudflare. Point it at a **Node** host that can write files (`data/` stores jobs and WAV audio). A Cloudflare Worker cannot use that disk store until we add D1/R2.
+
+Joe paste — Cloudflare DNS (zone `songsnuggle.com`):
+
+```
+# Apex: A or CNAME to your Node host, Proxied (orange cloud)
+# www:  CNAME songsnuggle.com, Proxied
+
+APP_URL=https://songsnuggle.com
+```
+
+Then in `.env.local` (or the host’s secrets):
+
+```
+NEXT_PUBLIC_BRAND_NAME=SongSnuggle
+NEXT_PUBLIC_SUPPORT_EMAIL=hello@songsnuggle.com
+APP_URL=https://songsnuggle.com
+```
+
+Redeploy, then run `npm run sync:whop` so Whop can create the webhook at `https://songsnuggle.com/api/webhooks/whop`. Without that public https webhook, a live $39 payment will charge and will not auto-unlock the song.
 
 ## Sync to your Whop account
 
@@ -71,7 +86,7 @@ Use your existing [whop.com](https://whop.com) company. Sandbox is optional and 
 ```
 WHOP_COMPANY_API_KEY=apik_...
 WHOP_COMPANY_ID=biz_...
-APP_URL=https://your-deployed-domain.com
+APP_URL=https://songsnuggle.com
 ```
 
 4. Deploy so Whop can reach `/api/webhooks/whop`.
@@ -81,9 +96,9 @@ APP_URL=https://your-deployed-domain.com
 npm run sync:whop
 ```
 
-That creates the Hearloom product, the `$39` song plan, the `$58` song+lyrics plan, and a webhook. The webhook signing secret is saved automatically when `APP_URL` is public https.
+If product/plan IDs already exist, this **updates** the SongSnuggle product title instead of creating a second product. The webhook signing secret is saved automatically when `APP_URL` is public https.
 
-Hearloom never stores cards. Whop handles checkout; the webhook unlocks the full recording. The private page lets you listen, download, copy the link, and download a lyric PDF if that add-on was purchased.
+SongSnuggle never stores cards. Whop handles checkout; the webhook unlocks the full recording. The private page lets you listen, download, copy the link, and download a lyric PDF if that add-on was purchased.
 
 ## Production music
 

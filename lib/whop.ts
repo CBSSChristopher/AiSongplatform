@@ -23,7 +23,7 @@ export function getWhop() {
 }
 
 export function appUrl() {
-  return process.env.APP_URL || "http://localhost:3000";
+  return process.env.APP_URL || "https://songsnuggle.com";
 }
 
 export function songPlanId(includeLyricPrint: boolean) {

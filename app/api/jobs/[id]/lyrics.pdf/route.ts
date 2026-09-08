@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { brand } from "@/lib/brand";
 import { lyricPdf } from "@/lib/pdf";
 import { getJob } from "@/lib/store";
 
@@ -19,7 +20,7 @@ export async function GET(
   }
 
   const bytes = await lyricPdf(job);
-  const filename = `${job.recipientName || "hearloom"}-lyrics.pdf`.replace(/[^\w.-]+/g, "-");
+  const filename = `${job.recipientName || brand.fileSlug}-lyrics.pdf`.replace(/[^\w.-]+/g, "-");
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",

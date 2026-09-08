@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
+import { brand } from "@/lib/brand";
 import { audioPath, getJob } from "@/lib/store";
 
 export async function GET(
@@ -26,7 +27,7 @@ export async function GET(
   try {
     const bytes = await readFile(audioPath(id, kind));
     const download = url.searchParams.get("download") === "1";
-    const filename = `${job.recipientName || "hearloom"}-${kind}.wav`.replace(/[^\w.-]+/g, "-");
+    const filename = `${job.recipientName || brand.fileSlug}-${kind}.wav`.replace(/[^\w.-]+/g, "-");
     return new NextResponse(Uint8Array.from(bytes), {
       headers: {
         "Content-Type": "audio/wav",

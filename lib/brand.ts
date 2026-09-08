@@ -1,7 +1,10 @@
 export const brand = {
-  name: process.env.NEXT_PUBLIC_BRAND_NAME || "Hearloom",
+  name: process.env.NEXT_PUBLIC_BRAND_NAME || "SongSnuggle",
   tagline: process.env.NEXT_PUBLIC_BRAND_TAGLINE || "A song they can keep.",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@hearloom.app",
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "hello@songsnuggle.com",
+  fileSlug: (process.env.NEXT_PUBLIC_BRAND_NAME || "SongSnuggle")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ""),
   songPrice: Number(process.env.NEXT_PUBLIC_SONG_PRICE || "39"),
   lyricsPrice: Number(process.env.NEXT_PUBLIC_LYRICS_PRICE || "19"),
 };

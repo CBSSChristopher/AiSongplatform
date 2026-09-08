@@ -32,7 +32,7 @@ async function main() {
   if (!buf.subarray(0, 4).equals(Buffer.from("%PDF"))) {
     throw new Error("PDF magic missing");
   }
-  writeFileSync("/tmp/hearloom-lyrics-test.pdf", buf);
+  writeFileSync("/tmp/songsnuggle-lyrics-test.pdf", buf);
   console.log("pdf_ok", buf.length);
 }
 

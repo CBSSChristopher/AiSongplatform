@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { brand } from "@/lib/brand";
 import type { PublicSongJob } from "@/lib/types";
 
 export function SongDelivery({ job }: { job: PublicSongJob }) {
@@ -23,7 +24,7 @@ export function SongDelivery({ job }: { job: PublicSongJob }) {
     }
   }
 
-  const subject = encodeURIComponent(`Your Hearloom for ${job.recipientName}`);
+  const subject = encodeURIComponent(`Your ${brand.name} for ${job.recipientName}`);
   const body =
     typeof window === "undefined"
       ? ""

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: `${brand.name} — ${brand.tagline}`,
   description:
     "Turn a name, a memory, and a few true details into a personalized song. Free preview. Pay after you listen. Delivered digitally.",
-  metadataBase: new URL(process.env.APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(process.env.APP_URL || "https://songsnuggle.com"),
   openGraph: {
     title: `${brand.name} — ${brand.tagline}`,
     description:

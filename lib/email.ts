@@ -8,7 +8,7 @@ export function songUrl(jobId: string) {
 
 export function deliveryMailto(job: SongJob) {
   const link = songUrl(job.id);
-  const subject = encodeURIComponent(`Your Hearloom for ${job.recipientName}`);
+  const subject = encodeURIComponent(`Your ${brand.name} for ${job.recipientName}`);
   const body = encodeURIComponent(
     [
       `A song for ${job.recipientName} is ready.`,
@@ -41,7 +41,7 @@ export async function sendDeliveryEmail(job: SongJob) {
     body: JSON.stringify({
       from: `${brand.name} <${from}>`,
       to: [job.email],
-      subject: `Your Hearloom for ${job.recipientName}`,
+      subject: `Your ${brand.name} for ${job.recipientName}`,
       text: [
         `A song for ${job.recipientName} is ready.`,
         "",

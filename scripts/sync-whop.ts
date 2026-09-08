@@ -1,7 +1,6 @@
 #!/usr/bin/env npx tsx
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { WhopClient } from "@whop/sdk";
-import { brand } from "../lib/brand";
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -37,6 +36,7 @@ function upsertEnv(updates: Record<string, string>) {
 
 async function main() {
   loadEnv();
+  const { brand } = await import("../lib/brand");
   const token = process.env.WHOP_COMPANY_API_KEY;
   const accountId = process.env.WHOP_COMPANY_ID;
   if (!token || !accountId) {
@@ -51,37 +51,53 @@ async function main() {
       : "https://api.whop.com/api/v1",
   });
 
-  const product = await client.products.create({
-    account_id: accountId,
+  const existingProductId = process.env.WHOP_PRODUCT_ID;
+  const productFields = {
     title: `${brand.name} personalized song`,
     headline: brand.tagline,
-    description: "A personalized gift song with a free preview, lyric approval, and email delivery after payment.",
-    visibility: "visible",
-  });
+    description:
+      "A personalized gift song with a free preview, lyric approval, and email delivery after payment.",
+    visibility: "visible" as const,
+  };
 
-  const song = await client.plans.create({
-    account_id: accountId,
-    product_id: product.id,
-    plan_type: "one_time",
-    initial_price: brand.songPrice,
-    currency: "usd",
-    title: "Complete song",
-    description: "Full personalized recording, private listening page, and MP3-style download.",
-    visibility: "visible",
-    unlimited_stock: true,
-  });
+  const product = existingProductId
+    ? await client.products.update({ id: existingProductId, ...productFields })
+    : await client.products.create({
+        account_id: accountId,
+        ...productFields,
+      });
 
-  const bundle = await client.plans.create({
-    account_id: accountId,
-    product_id: product.id,
-    plan_type: "one_time",
-    initial_price: brand.songPrice + brand.lyricsPrice,
-    currency: "usd",
-    title: "Song + lyric print",
-    description: "Full song plus a printable lyric keepsake PDF.",
-    visibility: "visible",
-    unlimited_stock: true,
-  });
+  let songId = process.env.WHOP_PLAN_ID_SONG || "";
+  if (!songId) {
+    const song = await client.plans.create({
+      account_id: accountId,
+      product_id: product.id,
+      plan_type: "one_time",
+      initial_price: brand.songPrice,
+      currency: "usd",
+      title: "Complete song",
+      description: "Full personalized recording, private listening page, and MP3-style download.",
+      visibility: "visible",
+      unlimited_stock: true,
+    });
+    songId = song.id;
+  }
+
+  let bundleId = process.env.WHOP_PLAN_ID_BUNDLE || "";
+  if (!bundleId) {
+    const bundle = await client.plans.create({
+      account_id: accountId,
+      product_id: product.id,
+      plan_type: "one_time",
+      initial_price: brand.songPrice + brand.lyricsPrice,
+      currency: "usd",
+      title: "Song + lyric print",
+      description: "Full song plus a printable lyric keepsake PDF.",
+      visibility: "visible",
+      unlimited_stock: true,
+    });
+    bundleId = bundle.id;
+  }
 
   const appUrl = process.env.APP_URL || "http://localhost:3000";
   const publicApp = /^https:\/\//.test(appUrl) && !/localhost|127\.0\.0\.1/.test(appUrl);
@@ -105,15 +121,15 @@ async function main() {
 
   const saved = upsertEnv({
     WHOP_PRODUCT_ID: product.id,
-    WHOP_PLAN_ID_SONG: song.id,
-    WHOP_PLAN_ID_BUNDLE: bundle.id,
+    WHOP_PLAN_ID_SONG: songId,
+    WHOP_PLAN_ID_BUNDLE: bundleId,
     ...(webhookId ? { WHOP_WEBHOOK_ID: webhookId } : {}),
     ...(webhookSecret ? { WHOP_WEBHOOK_SECRET: webhookSecret } : {}),
   });
 
-  console.log(`Created Whop product ${product.id}`);
-  console.log(`Song plan ${song.id} @ $${brand.songPrice}`);
-  console.log(`Bundle plan ${bundle.id} @ $${brand.songPrice + brand.lyricsPrice}`);
+  console.log(`${existingProductId ? "Updated" : "Created"} Whop product ${product.id} (${productFields.title})`);
+  console.log(`Song plan ${songId} @ $${brand.songPrice}`);
+  console.log(`Bundle plan ${bundleId} @ $${brand.songPrice + brand.lyricsPrice}`);
   if (webhookId) console.log(`Webhook ${webhookId} -> ${appUrl}/api/webhooks/whop`);
   console.log(`IDs written to ${saved}`);
   if (!webhookSecret) console.log("Webhook secret will be saved automatically when a public APP_URL is set.");

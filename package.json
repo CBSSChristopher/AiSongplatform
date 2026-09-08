@@ -1,5 +1,6 @@
 {
   "name": "hearloom",
+  "description": "SongSnuggle — personalized gift songs. Code name Hearloom.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
