@@ -38,7 +38,10 @@ yarn-error.log*
 /data/jobs.json
 /data/audio/
 
-# vercel
+# cloudflare
+.open-next
+.wrangler
+.dev.vars
 .vercel
 
 # typescript

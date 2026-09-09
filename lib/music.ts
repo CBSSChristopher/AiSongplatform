@@ -1,6 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { audioPath } from "./store";
+import { writeAudio } from "./store";
 import type { SongJob } from "./types";
 
 function hashSeed(input: string) {
@@ -102,13 +100,9 @@ function synthesize(job: SongJob, seconds: number) {
 }
 
 export async function writePreviewAudio(job: SongJob) {
-  const file = audioPath(job.id, "preview");
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, synthesize(job, 45));
+  await writeAudio(job.id, "preview", synthesize(job, 45));
 }
 
 export async function writeFullAudio(job: SongJob) {
-  const file = audioPath(job.id, "full");
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, synthesize(job, 150));
+  await writeAudio(job.id, "full", synthesize(job, 150));
 }

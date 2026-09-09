@@ -54,26 +54,22 @@ Cheaper/faster: `ANTHROPIC_MODEL=claude-sonnet-5`. OpenAI and Groq still work. I
 
 ## Go live on songsnuggle.com
 
-The domain is already on Cloudflare. Point it at a **Node** host that can write files (`data/` stores jobs and WAV audio). A Cloudflare Worker cannot use that disk store until we add D1/R2.
+The app deploys as a Cloudflare Worker named `songsnuggle`. Jobs persist in D1 (`songsnuggle-jobs`). Audio lives in KV (`songsnuggle-audio`). Local `npm run dev` still uses the `data/` folder.
 
-Joe paste — Cloudflare DNS (zone `songsnuggle.com`):
-
-```
-# Apex: A or CNAME to your Node host, Proxied (orange cloud)
-# www:  CNAME songsnuggle.com, Proxied
-
-APP_URL=https://songsnuggle.com
+```bash
+npm run deploy
 ```
 
-Then in `.env.local` (or the host’s secrets):
+That attaches `songsnuggle.com` and `www.songsnuggle.com` as custom domains. Then set Worker secrets (never commit these):
 
 ```
-NEXT_PUBLIC_BRAND_NAME=SongSnuggle
-NEXT_PUBLIC_SUPPORT_EMAIL=hello@songsnuggle.com
-APP_URL=https://songsnuggle.com
+npx wrangler secret put WHOP_COMPANY_API_KEY
+npx wrangler secret put WHOP_COMPANY_ID
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put WHOP_WEBHOOK_SECRET
 ```
 
-Redeploy, then run `npm run sync:whop` so Whop can create the webhook at `https://songsnuggle.com/api/webhooks/whop`. Without that public https webhook, a live $39 payment will charge and will not auto-unlock the song.
+Then run `npm run sync:whop` with `APP_URL=https://songsnuggle.com` so Whop can create the webhook at `https://songsnuggle.com/api/webhooks/whop`. Without that public https webhook, a live $39 payment will charge and will not auto-unlock the song.
 
 ## Sync to your Whop account
 
@@ -106,4 +102,5 @@ The included preview is a generated instrumental so the funnel works without a m
 
 ## Stack
 
-Next.js App Router, Whop Checkout embed (`@whop/checkout`), Whop API (`@whop/sdk`), file-backed job store in `data/` for the first version.
+# Next.js App Router, Whop Checkout embed (`@whop/checkout`), Whop API (`@whop/sdk`).
+# Local store: `data/`. Production: Cloudflare D1 + KV.

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@whop/sdk"],
+  serverExternalPackages: ["@whop/sdk", "@opennextjs/cloudflare"],
 };
 
 export default nextConfig;

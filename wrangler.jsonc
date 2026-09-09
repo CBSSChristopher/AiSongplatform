@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "songsnuggle",
+  "main": ".open-next/worker.js",
+  "account_id": "c26984df74d264105345ad1f424067b5",
+  "compatibility_date": "2026-09-09",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    { "pattern": "songsnuggle.com", "custom_domain": true },
+    { "pattern": "www.songsnuggle.com", "custom_domain": true }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_BRAND_NAME": "SongSnuggle",
+    "NEXT_PUBLIC_BRAND_TAGLINE": "A song they can keep.",
+    "NEXT_PUBLIC_SUPPORT_EMAIL": "hello@songsnuggle.com",
+    "NEXT_PUBLIC_SONG_PRICE": "39",
+    "NEXT_PUBLIC_LYRICS_PRICE": "19",
+    "APP_URL": "https://songsnuggle.com",
+    "LYRIC_PROVIDER": "anthropic",
+    "ANTHROPIC_MODEL": "claude-opus-5",
+    "WHOP_PRODUCT_ID": "prod_luh7orH2mbK32",
+    "WHOP_PLAN_ID_SONG": "plan_oh2x5D1LKgd3N",
+    "WHOP_PLAN_ID_BUNDLE": "plan_NlUq7bNsff0y0",
+    "WHOP_COMPANY_ID": "biz_PpOMQXyFByNYu2"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "songsnuggle-jobs",
+      "database_id": "bdcd7ace-9eba-4052-b5c5-f2abaac854a2"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "AUDIO",
+      "id": "4f8262cb903743708308da8c8b3ea2dc"
+    }
+  ]
+}

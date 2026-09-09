@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { brand } from "@/lib/brand";
-import { audioPath, getJob } from "@/lib/store";
+import { getJob, readAudio } from "@/lib/store";
 
 export async function GET(
   request: Request,
@@ -25,10 +24,13 @@ export async function GET(
   }
 
   try {
-    const bytes = await readFile(audioPath(id, kind));
+    const bytes = await readAudio(id, kind);
+    if (!bytes) {
+      return NextResponse.json({ error: "Audio file missing." }, { status: 404 });
+    }
     const download = url.searchParams.get("download") === "1";
     const filename = `${job.recipientName || brand.fileSlug}-${kind}.wav`.replace(/[^\w.-]+/g, "-");
-    return new NextResponse(Uint8Array.from(bytes), {
+    return new NextResponse(Buffer.from(bytes), {
       headers: {
         "Content-Type": "audio/wav",
         "Cache-Control": "no-store",
