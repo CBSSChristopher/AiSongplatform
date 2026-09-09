@@ -17,10 +17,10 @@ export function PreviewStudio({ id }: { id: string }) {
   useEffect(() => {
     fetch(`/api/jobs/${id}`)
       .then(async (response) => {
-        const json = await response.json();
+        const json = (await response.json()) as { error?: string; job?: PublicSongJob };
         if (!response.ok) throw new Error(json.error);
-        setJob(json.job);
-        setLyrics(json.job.lyrics || "");
+        setJob(json.job ?? null);
+        setLyrics(json.job?.lyrics || "");
       })
       .catch((err: Error) => setError(err.message));
   }, [id]);
@@ -34,9 +34,9 @@ export function PreviewStudio({ id }: { id: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lyrics }),
       });
-      const json = await response.json();
+      const json = (await response.json()) as { error?: string; job?: PublicSongJob };
       if (!response.ok) throw new Error(json.error);
-      setJob(json.job);
+      setJob(json.job ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save lyrics.");
     } finally {
@@ -55,14 +55,14 @@ export function PreviewStudio({ id }: { id: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ lyrics }),
         });
-        const savedJson = await saved.json();
+        const savedJson = (await saved.json()) as { error?: string; job?: PublicSongJob };
         if (!saved.ok) throw new Error(savedJson.error);
-        setJob(savedJson.job);
+        setJob(savedJson.job ?? null);
       }
       const response = await fetch(`/api/jobs/${id}/preview`, { method: "POST" });
-      const json = await response.json();
+      const json = (await response.json()) as { error?: string; job?: PublicSongJob };
       if (!response.ok) throw new Error(json.error);
-      setJob(json.job);
+      setJob(json.job ?? null);
       setAudioKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not make preview.");

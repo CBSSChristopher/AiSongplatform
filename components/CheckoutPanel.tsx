@@ -55,7 +55,7 @@ export function CheckoutPanel({ id }: { id: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId: id }),
       });
-      const json = await response.json();
+      const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error);
       router.push(`/song/${id}`);
     } catch (err) {

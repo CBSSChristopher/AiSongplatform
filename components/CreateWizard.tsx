@@ -85,12 +85,12 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const json = await response.json();
+      const json = (await response.json()) as { error?: string; job?: { id: string } };
       if (!response.ok) throw new Error(json.error || "Could not save your story.");
-      const lyrics = await fetch(`/api/jobs/${json.job.id}/lyrics`, { method: "POST" });
-      const lyricJson = await lyrics.json();
+      const lyrics = await fetch(`/api/jobs/${json.job?.id}/lyrics`, { method: "POST" });
+      const lyricJson = (await lyrics.json()) as { error?: string };
       if (!lyrics.ok) throw new Error(lyricJson.error || "Could not draft lyrics.");
-      router.push(`/preview/${json.job.id}`);
+      router.push(`/preview/${json.job?.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setBusy(false);
