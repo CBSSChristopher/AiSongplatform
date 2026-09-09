@@ -1,0 +1,41 @@
+{
+  "name": "hearloom",
+  "description": "SongSnuggle — personalized gift songs. Code name Hearloom.",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "lint": "eslint",
+    "sync:whop": "tsx scripts/sync-whop.ts",
+    "test:lyrics": "tsx scripts/test-lyrics.ts",
+    "test:pdf": "tsx scripts/test-pdf.ts"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "@opennextjs/cloudflare": "^1.20.6",
+    "@whop/checkout": "^0.6.0",
+    "@whop/sdk": "^1.1.2",
+    "next": "16.3.4",
+    "pdf-lib": "^1.17.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5",
+    "wrangler": "^4.130.0"
+  }
+}

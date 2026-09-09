@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4efe4;
+  --ink: #1b2a24;
+  --muted: #5b675f;
+  --copper: #b4532a;
+  --copper-dark: #8c3d1d;
+  --gold: #c4a574;
+  --card: #fffaf2;
+  --line: #e3d8c6;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+.serif {
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
