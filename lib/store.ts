@@ -29,6 +29,7 @@ export function publicJob(job: SongJob): PublicSongJob {
     lyricCues: job.lyricCues || [],
     includeLyricPrint: job.includeLyricPrint,
     previewReady: job.previewReady,
+    listenCompletedAt: job.listenCompletedAt ?? null,
     fullReady: job.fullReady,
     paidAt: job.paidAt,
   };
@@ -74,6 +75,7 @@ export async function createJob(partial: Partial<SongJob>): Promise<SongJob> {
     lyricCues: [],
     includeLyricPrint: false,
     previewReady: false,
+    listenCompletedAt: null,
     fullReady: false,
     paidAt: null,
     whopPaymentId: null,

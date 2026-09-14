@@ -30,6 +30,7 @@ export async function POST(
     lyrics,
     status: "lyrics",
     previewReady: false,
+    listenCompletedAt: null,
     fullReady: false,
   });
 

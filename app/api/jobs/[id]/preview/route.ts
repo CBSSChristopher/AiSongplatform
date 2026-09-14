@@ -18,9 +18,10 @@ export async function POST(
   const cues = await writePreviewAudio({ ...job });
   const next = await updateJob(id, {
     previewReady: true,
+    listenCompletedAt: null,
     status: "preview",
     lyricCues: cues,
   });
 
-  return NextResponse.json({ job: next ? publicJob(next) : publicJob({ ...job, previewReady: true }) });
+  return NextResponse.json({ job: next ? publicJob(next) : publicJob({ ...job, previewReady: true, listenCompletedAt: null }) });
 }
