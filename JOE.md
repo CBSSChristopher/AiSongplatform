@@ -96,7 +96,8 @@ Worker secrets (names only — never paste values in chat; use Cursor secret car
 - `WHOP_COMPANY_API_KEY` (already on Worker)
 - `ANTHROPIC_API_KEY` (already on Worker)
 - `WHOP_WEBHOOK_SECRET` (already on Worker)
-- `RESEND_API_KEY` (**add** — delivery email off until set)
+- `XAI_API_KEY` (xAI Grok TTS — required for sung preview/full audio; already on Worker)
+- `RESEND_API_KEY` (**add** — delivery email soft-skips until set)
 
 `WHOP_COMPANY_ID` and plan IDs are non-secret vars in `wrangler.jsonc`.
 
@@ -136,17 +137,18 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 | `app/api/checkout` | Creates Whop checkout session |
 | `app/api/webhooks/whop` | Unlocks after `payment.succeeded` |
 | `lib/brand.ts` | Name, prices, recipients, genres |
-| `lib/lyrics.ts` | Anthropic default; OpenAI/Groq optional; template fallback |
-| `lib/music.ts` | In-house WAV synth (instrumental, not vocals) |
+| `lib/lyrics.ts` | Anthropic default; OpenAI/Groq optional; template only if `LYRIC_PROVIDER=template` |
+| `lib/music.ts` | Routes to xAI Grok TTS (+ light synth bed) or local formant synth |
+| `lib/music-xai.ts` | xAI TTS `POST /v1/tts` singing tags → WAV + karaoke cues |
 | `lib/store.ts` | Local `data/` or Cloudflare D1 + KV |
 | `lib/fulfill.ts` | Shared paid fulfillment |
 | `lib/email.ts` | Resend delivery email after unlock |
 | `scripts/sync-whop.ts` | Create/update Whop product + webhook |
 | `wrangler.jsonc` | Worker, domain, D1, KV, public vars |
 
-Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the key fails, lyrics silently fall back to the built-in template (line starts with “If a melody could hold a person”). Groq (lyric API) is **not** Grok (this bot).
+Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the lyric API fails, the route returns **502** with a clear error — it does **not** silently substitute `draftLyrics`. Use `LYRIC_PROVIDER=template` only for local/dev. Groq (lyric API) is **not** Grok (this bot).
 
-Music: `lib/music.ts` **sings the lyric script** with a formant vocal over a backing track. Word-level cues highlight in the player as they are sung. It is original generated music, not a studio vocal. Replace `lib/music.ts` and keep `writePreviewAudio` / `writeFullAudio` when adding Suno or similar.
+Music: **xAI Grok TTS** when `XAI_API_KEY` is set (production default, `MUSIC_PROVIDER=xai`). Honest gap: this is singing-style voice, **not** full instrumental music generation. Lyrics are wrapped in `<singing>` / `<sing-song>` and posted to `https://api.x.ai/v1/tts` with `with_timestamps: true` and `output_format.codec=wav`. Karaoke cues come from `audio_timestamps.graph_chars` + `graph_times` (speech tags skipped, remaining chars grouped into words). A soft formant/synth **instrumental bed** is mixed under the vocal; if mix fails, the gift is a-cappella WAV. Formant synth (`lib/music.ts` `renderSong`) only when `MUSIC_PROVIDER=synth` for local tests — never a silent production fallback. Missing `XAI_API_KEY` throws (preview 502). Production does **not** use `ELEVENLABS_API_KEY`. Suno has no official self-serve API.
 
 Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + KV. Disk will not persist on Workers.
 
@@ -160,10 +162,25 @@ Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + K
 
 Without the public https webhook, a live payment can charge and **not** unlock.
 
+
+## Whop unlock / job_id (blocker 4)
+
+Checkout attaches `job_id` (also `jobId` + `custom_id`) on the Whop checkout configuration metadata, stores `checkoutSessionId`, and puts `?job=` on the redirect URL.
+
+Webhook `payment.succeeded` resolves the job from metadata / custom_id / `checkout_configuration_id` (lookup by stored session). Missing job_id returns **422** (not silent 200). Unlock is idempotent (`paidAt` + `fullReady`).
+
+**Prove without Joseph cash**
+
+1. Dry-run (no charge): `npm run test:whop-unlock`
+2. Promo: on checkout, enter **FREESNUGGLE** → `POST /api/demo-pay` unlocks the private `/song/[id]` page (logs `path: freesnuggle`).
+3. Local demo: with Whop keys unset / `DEMO_CHECKOUT=true`, use “Unlock full song (demo)”.
+
+Do **not** run a live $39 pay-to-prove unless Court/Joe approve a refundable test and log the spend. Live E2E after deploy remains a remaining gap until one paid+refunded purchase.
+
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
-2. Sung vocals (preview now sings lyrics in-house; studio vocal still needs Suno or similar).
+2. Studio-band music still a gap (live audio is Grok TTS singing + light synth bed, not Suno/full mix).
 3. Resend: code wired; Joe still needs `wrangler secret put RESEND_API_KEY` (+ domain verify for `hello@songsnuggle.com`).
 4. Merge PR `#2` into `main` (only if Court/Joe want that).
 

@@ -29,6 +29,7 @@ export type SongJob = {
   lyricCues: LyricCue[];
   includeLyricPrint: boolean;
   previewReady: boolean;
+  listenCompletedAt: string | null;
   fullReady: boolean;
   paidAt: string | null;
   whopPaymentId: string | null;

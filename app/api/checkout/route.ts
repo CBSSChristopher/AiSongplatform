@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { brand } from "@/lib/brand";
 import { getJob, publicJob, updateJob } from "@/lib/store";
 import { appUrl, demoCheckoutEnabled, getWhop, songPlanId, whopConfigured } from "@/lib/whop";
+import { checkoutJobMetadata, checkoutRedirectUrl } from "@/lib/whop-unlock";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
@@ -15,7 +16,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Song not found." }, { status: 404 });
   }
   if (!job.previewReady) {
-    return NextResponse.json({ error: "Listen to the preview before checkout." }, { status: 400 });
+    return NextResponse.json({ error: "Create and listen to the preview before checkout." }, { status: 400 });
+  }
+  if (!job.listenCompletedAt) {
+    return NextResponse.json(
+      { error: "Listen to the preview first. Checkout stays locked until play progress is recorded." },
+      { status: 400 },
+    );
   }
 
   const next = await updateJob(job.id, {
@@ -41,16 +48,14 @@ export async function POST(request: Request) {
 
   try {
     const redirect = appUrl();
+    const metadata = checkoutJobMetadata(job.id, includeLyricPrint);
     const checkout = await getWhop().checkoutConfigurations.create({
       account_id: process.env.WHOP_COMPANY_ID,
       plan_id: planId,
       mode: "payment",
-      metadata: {
-        job_id: job.id,
-        include_lyric_print: includeLyricPrint,
-      },
+      metadata,
       ...(redirect.startsWith("https://")
-        ? { redirect_url: `${redirect}/checkout/complete?job=${job.id}` }
+        ? { redirect_url: checkoutRedirectUrl(redirect, job.id) }
         : {}),
     });
 
@@ -62,6 +67,8 @@ export async function POST(request: Request) {
       planId,
       environment: process.env.WHOP_SANDBOX === "true" ? "sandbox" : "production",
       job: next ? publicJob(next) : publicJob(job),
+      // Echo so clients / logs can confirm attachment without reading secrets
+      jobIdAttached: job.id,
     });
   } catch (error) {
     const message =
