@@ -3,6 +3,10 @@ import { writeFullAudio } from "./music";
 import { getJob, updateJob } from "./store";
 import type { SongJob } from "./types";
 
+/**
+ * Unlock full song after Whop payment.succeeded, demo-pay, or FREESNUGGLE.
+ * Delivery email is best-effort: Resend failures are logged and never roll back unlock.
+ */
 export async function fulfillPaidJob(job: SongJob, paymentId: string | null) {
   if (job.paidAt && job.fullReady) {
     return job;
@@ -17,6 +21,19 @@ export async function fulfillPaidJob(job: SongJob, paymentId: string | null) {
     whopPaymentId: paymentId ?? job.whopPaymentId,
   });
   const delivered = next ?? ((await getJob(job.id)) || job);
-  await sendDeliveryEmail(delivered).catch((error) => console.error("[email]", error));
+
+  // Soft-fail: unlock already persisted above.
+  try {
+    const result = await sendDeliveryEmail(delivered);
+    if (!result.sent) {
+      console.info("[email] delivery skipped or soft-failed after unlock", {
+        jobId: delivered.id,
+        reason: result.reason,
+      });
+    }
+  } catch (error) {
+    console.error("[email] unexpected error after unlock (unlock kept)", error);
+  }
+
   return delivered;
 }
