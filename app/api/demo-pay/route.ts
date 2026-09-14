@@ -19,8 +19,11 @@ export async function POST(request: Request) {
   if (!job) {
     return NextResponse.json({ error: "Song not found." }, { status: 404 });
   }
-  if (!job.previewReady) {
-    return NextResponse.json({ error: "Listen to the preview before unlock." }, { status: 400 });
+  if (!job.previewReady || !job.listenCompletedAt) {
+    return NextResponse.json(
+      { error: "Listen to the preview before unlocking the song." },
+      { status: 400 },
+    );
   }
 
   const paymentTag = freeSnuggle ? "freesnuggle" : "demo";

@@ -1,6 +1,10 @@
 import { writeAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
+import { splitSyllables, sungLines } from "./lyric-parse";
+import { renderWithXai } from "./music-xai";
 import type { SongJob } from "./types";
+
+export { splitSyllables, sungLines } from "./lyric-parse";
 
 function hashSeed(input: string) {
   let h = 2166136261;
@@ -62,67 +66,8 @@ function encodeWav(samples: Float32Array, sampleRate: number) {
   return buffer;
 }
 
-function sectionOf(header: string): LyricCue["section"] {
-  const value = header.toLowerCase();
-  if (value.includes("chorus")) return "chorus";
-  if (value.includes("bridge")) return "bridge";
-  return "verse";
-}
 
-export function sungLines(lyrics: string) {
-  const lines: { text: string; section: LyricCue["section"] }[] = [];
-  let section: LyricCue["section"] = "verse";
-  for (const raw of lyrics.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (/^(verse|chorus|bridge|final chorus|pre-chorus|outro)\b/i.test(line) && line.length < 48) {
-      section = sectionOf(line);
-      continue;
-    }
-    lines.push({ text: line.replace(/^[-*]\s+/, ""), section });
-  }
-  return lines;
-}
 
-export function splitSyllables(word: string): string[] {
-  const core = word.replace(/[^A-Za-z']/g, "");
-  if (!core) return [word];
-  const lower = core.toLowerCase();
-  const isVowel = (index: number) => {
-    const ch = lower[index];
-    if ("aeiou".includes(ch)) return true;
-    if (ch === "y") {
-      const prev = index > 0 ? lower[index - 1] : "";
-      return !"aeiou".includes(prev);
-    }
-    return false;
-  };
-  const groups: { start: number; end: number }[] = [];
-  let i = 0;
-  while (i < lower.length) {
-    if (isVowel(i)) {
-      const start = i;
-      while (i < lower.length && isVowel(i)) i += 1;
-      groups.push({ start, end: i });
-    } else {
-      i += 1;
-    }
-  }
-  if (groups.length <= 1) return [core];
-  const cuts = [0];
-  for (let g = 1; g < groups.length; g += 1) {
-    const consonants = groups[g].start - groups[g - 1].end;
-    const onset = consonants <= 1 ? consonants : 1;
-    cuts.push(groups[g].start - onset);
-  }
-  const parts: string[] = [];
-  for (let c = 0; c < cuts.length; c += 1) {
-    const end = c === cuts.length - 1 ? core.length : cuts[c + 1];
-    const part = core.slice(cuts[c], end);
-    if (part) parts.push(part);
-  }
-  return parts.length ? parts : [core];
-}
 
 function formantsFor(syllable: string): [number, number, number] {
   const seq = (syllable.toLowerCase().match(/[aeiouy]+/)?.[0] || "a").replace(/y/g, "i");
@@ -348,14 +293,80 @@ function renderSong(job: SongJob, seconds: number) {
   return { wav: encodeWav(samples, sampleRate), cues };
 }
 
+function mixVocalWithBed(vocal: Float32Array, bed: Float32Array) {
+  const out = new Float32Array(vocal.length);
+  const n = Math.min(vocal.length, bed.length);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = vocal[i] * 0.88 + bed[i] * 0.22;
+  }
+  for (let i = n; i < vocal.length; i += 1) out[i] = vocal[i] * 0.88;
+  normalize(out);
+  return out;
+}
+
+/** Soft instrumental-only bed (pads + light kick/hat). No formant vocals. */
+function renderInstrumentalBed(job: SongJob, seconds: number, sampleRate: number) {
+  const total = Math.max(1, Math.floor(sampleRate * Math.max(0.5, seconds)));
+  const samples = new Float32Array(total);
+  const random = rng(hashSeed(`${job.id}:bed:${job.genre}`));
+  const scale = genreScale(job.genre);
+  const bpm =
+    job.genre === "lullaby" ? 70 : job.genre === "rock" ? 100 : job.genre === "worship" ? 74 : job.genre === "pop" ? 92 : 84;
+  const beat = 60 / bpm;
+  const root = scale[0] - 12;
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root), 0.055);
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root + 7), 0.028);
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root + 12), 0.016);
+  for (let t = 0; t < seconds - 0.05; t += beat * 4) {
+    addTone(samples, sampleRate, t, Math.min(beat * 3.6, seconds - t), midiToFreq(root + 4), 0.02);
+  }
+  for (let t = 0; t < seconds - 0.02; t += beat) {
+    addKick(samples, sampleRate, t, 0.1);
+    addHat(samples, sampleRate, t + beat * 0.5, 0.03, random);
+  }
+  return samples;
+}
+
+function resolveMusicProvider(): "xai" | "synth" {
+  const forced = (process.env.MUSIC_PROVIDER || "").toLowerCase();
+  if (forced === "synth" || forced === "formant") return "synth";
+  return "xai"; // production default — missing XAI_API_KEY must throw, never silent formant
+}
+
+async function renderForJob(job: SongJob, seconds: number) {
+  const provider = resolveMusicProvider();
+  if (provider === "synth") {
+    return renderSong(job, seconds);
+  }
+  if (!process.env.XAI_API_KEY) {
+    throw new Error(
+      "Music provider is xAI Grok TTS, but XAI_API_KEY is not set. " +
+        "Add the Worker secret with: wrangler secret put XAI_API_KEY " +
+        "(or set MUSIC_PROVIDER=synth for local formant tests only).",
+    );
+  }
+  const vocals = await renderWithXai(job, seconds);
+  if (!vocals.samples.length || !vocals.sampleRate) {
+    return { wav: vocals.wav, cues: vocals.cues };
+  }
+  try {
+    const bed = renderInstrumentalBed(job, vocals.duration, vocals.sampleRate);
+    const mixed = mixVocalWithBed(vocals.samples, bed);
+    return { wav: encodeWav(mixed, vocals.sampleRate), cues: vocals.cues };
+  } catch (error) {
+    console.error("[music] instrumental bed mix failed; serving a-cappella xAI vocals", error);
+    return { wav: vocals.wav, cues: vocals.cues };
+  }
+}
+
 export async function writePreviewAudio(job: SongJob) {
-  const { wav, cues } = renderSong(job, 48);
+  const { wav, cues } = await renderForJob(job, 45);
   await writeAudio(job.id, "preview", wav);
   return cues;
 }
 
 export async function writeFullAudio(job: SongJob) {
-  const { wav, cues } = renderSong(job, 150);
+  const { wav, cues } = await renderForJob(job, 135);
   await writeAudio(job.id, "full", wav);
   return cues;
 }

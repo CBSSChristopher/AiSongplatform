@@ -16,7 +16,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Song not found." }, { status: 404 });
   }
   if (!job.previewReady) {
-    return NextResponse.json({ error: "Listen to the preview before checkout." }, { status: 400 });
+    return NextResponse.json({ error: "Create and listen to the preview before checkout." }, { status: 400 });
+  }
+  if (!job.listenCompletedAt) {
+    return NextResponse.json(
+      { error: "Listen to the preview first. Checkout stays locked until play progress is recorded." },
+      { status: 400 },
+    );
   }
 
   const next = await updateJob(job.id, {

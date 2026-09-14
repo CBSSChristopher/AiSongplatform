@@ -23,13 +23,21 @@ export async function POST(
   }
 
   if (!lyrics) {
-    lyrics = await generateLyrics(job);
+    try {
+      lyrics = await generateLyrics(job);
+    } catch (error) {
+      console.error("[lyrics-route]", error);
+      const message =
+        error instanceof Error ? error.message : "Could not generate lyrics.";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
   }
 
   const next = await updateJob(id, {
     lyrics,
     status: "lyrics",
     previewReady: false,
+    listenCompletedAt: null,
     fullReady: false,
   });
 
