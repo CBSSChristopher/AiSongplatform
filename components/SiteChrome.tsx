@@ -1,17 +1,31 @@
+import Image from "next/image";
 import Link from "next/link";
 import { brand } from "@/lib/brand";
 
 export function SiteHeader() {
   return (
     <header className="flex items-center justify-between gap-4 px-5 py-5 md:px-10">
-      <Link href="/" className="serif text-2xl tracking-tight">
-        {brand.name}
+      <Link href="/" className="flex items-center gap-2" aria-label={brand.name}>
+        <Image
+          src="/brand/wordmark-clean.png"
+          alt={brand.name}
+          width={220}
+          height={48}
+          className="h-9 w-auto md:h-10"
+          priority
+        />
       </Link>
       <nav className="flex items-center gap-5 text-sm text-[var(--muted)]">
-        <Link href="/#how" className="hover:text-[var(--ink)]">
+        <Link href="/#how" className="hidden hover:text-[var(--ink)] sm:inline">
           How it works
         </Link>
-        <Link href="/create" className="rounded-full bg-[var(--copper)] px-4 py-2 text-white">
+        <Link href="/#partners" className="hidden hover:text-[var(--ink)] sm:inline">
+          Partners
+        </Link>
+        <Link
+          href="/create"
+          className="rounded-full bg-[var(--copper)] px-4 py-2 text-white hover:bg-[var(--copper-dark)]"
+        >
           Free preview
         </Link>
       </nav>
