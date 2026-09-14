@@ -8,19 +8,19 @@ const moments = [
     title: "A kitchen dance",
     body: "Their name in the chorus. The Sunday pancake stubbornness in verse two. A keepsake you press play on — not another thing that sits in a drawer.",
     image: "/brand/mood-listen.png",
-    alt: "Quiet moment listening together at the kitchen table",
+    alt: "Two people listening to a gift song together at the kitchen table",
   },
   {
     title: "Flowers, then a song",
     body: "Pair the bouquet with something they can keep after the petals fade. The gift object is the recording — private page, download, share.",
     image: "/brand/mood-florist.png",
-    alt: "Florist bouquet with a small gift tag",
+    alt: "Florist handing a linen-wrapped bouquet to a recipient",
   },
   {
     title: "A blessing, kept",
     body: "Wedding aisle, bedtime, anniversary. Same craft. Different story. Photography of the day, song for the forever part.",
     image: "/brand/mood-wedding.png",
-    alt: "Wedding cake detail with soft linen light",
+    alt: "Couple in soft wedding light beside a linen cake table",
   },
 ];
 
@@ -57,7 +57,7 @@ export default function Home() {
           <div className="photo-frame relative aspect-[4/5] md:aspect-[5/6]">
             <Image
               src="/brand/mood-listen.png"
-              alt="Someone listening to a gift song in soft linen light"
+              alt="Two people sharing a gift song on a phone in soft linen light"
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
@@ -118,7 +118,7 @@ export default function Home() {
             <div className="photo-frame relative aspect-[5/4]">
               <Image
                 src="/brand/mood-wedding.png"
-                alt="Wedding keepsake detail in warm light"
+                alt="Wedding couple with keepsake cake table in warm light"
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -153,7 +153,7 @@ export default function Home() {
             <div className="relative min-h-[240px] md:min-h-full">
               <Image
                 src="/brand/mood-florist.png"
-                alt="Florist arranging a bouquet as a gift partner"
+                alt="Florist and recipient sharing a bouquet gift moment"
                 fill
                 className="object-cover opacity-90"
                 sizes="(max-width: 768px) 100vw, 50vw"
