@@ -6,33 +6,33 @@ import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 const moments = [
   {
     title: "A kitchen dance",
-    body: "Their name in the chorus. The Sunday pancake stubbornness in verse two. A keepsake you press play on — not another thing that sits in a drawer.",
+    body: "Their name in the chorus. The little Sunday habits in verse two. A song for the ordinary days that matter.",
     image: "/brand/mood-kitchen.png",
     alt: "Parent and child laughing together while baking in a linen kitchen",
   },
   {
     title: "Flowers, then a song",
-    body: "Pair the bouquet with something they can keep after the petals fade. The gift object is the recording — private page, download, share.",
+    body: "When the bouquet fades, they still have the song. Easy to add beside an arrangement or a print.",
     image: "/brand/mood-florist.png",
-    alt: "Florist handing a bouquet with a SongSnuggle card to a recipient",
+    alt: "Florist handing a bouquet to a recipient",
   },
   {
     title: "A blessing, kept",
-    body: "Wedding aisle, bedtime, anniversary. Same craft. Different story. Photography of the day, song for the forever part.",
+    body: "Weddings, anniversaries, quiet thank-yous. One song that holds the day.",
     image: "/brand/mood-wedding.png",
-    alt: "Wedding couple sharing earbuds and a gift song beside a small cake",
+    alt: "Wedding couple beside a small cake",
   },
   {
     title: "A birthday they can keep",
-    body: "Candles, faces, their name in the chorus. A party song they can press play on long after the cake is gone.",
+    body: "Candles go out. A birthday song with their name in it stays.",
     image: "/brand/mood-birthday.png",
-    alt: "Family at a kids birthday table with cake and a phone ready to play a gift song",
+    alt: "Family at a kids birthday table with cake",
   },
   {
     title: "A day worth a song",
-    body: "Graduation day gets a keepsake — family, the diploma, and a song that holds the feeling.",
+    body: "Graduation, the walk across the stage, the hug after. Mark it with music.",
     image: "/brand/mood-graduation.png",
-    alt: "Graduate in gown hugging family with diploma",
+    alt: "Graduate hugging family with diploma",
   },
 ];
 
@@ -50,9 +50,8 @@ export default function Home() {
               Their name. Your memory. A song they can keep.
             </h1>
             <p className="mt-5 max-w-xl text-lg text-[var(--muted)]">
-              {brand.name} turns a few true details into a personalized gift song — a digital
-              keepsake you listen to first, then own. Free preview. Pay once if you want the full
-              recording.
+              Share a few true details. Hear a free preview. Buy the full song only if you love
+              it.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
@@ -69,26 +68,24 @@ export default function Home() {
           <div className="photo-frame relative aspect-[4/5] md:aspect-[5/6]">
             <Image
               src="/brand/mood-listen.png"
-              alt="Parent and adult child sharing a gift song on a phone in soft linen light"
+              alt="Couple sharing a song on a phone in soft linen light"
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
               priority
             />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--photo-scrim)] to-transparent p-6 text-white">
-              <p className="serif text-2xl">A gift you can press play on</p>
-              <p className="mt-1 text-sm text-white/85">
-                Private page · download · share — after you approve the preview
-              </p>
+              <p className="serif text-2xl">Listen first. Buy if it feels right.</p>
+              <p className="mt-1 text-sm text-white/85">Free preview · one-time checkout</p>
             </div>
           </div>
         </section>
 
         <section id="how" className="px-5 py-12 md:px-10">
-          <h2 className="serif text-4xl">Little songs. Kept feelings.</h2>
+          <h2 className="serif text-4xl">Little songs. Big days.</h2>
           <p className="mt-3 max-w-2xl text-[var(--muted)]">
-            Think florist wrapping, photographer album, cake topper — then the song that belongs
-            with the day. Photography-forward moments. The song is the object you leave with.
+            Birthdays, bouquets, weddings, graduations — a personal song that belongs with the
+            moment.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {moments.map((moment) => (
@@ -118,19 +115,19 @@ export default function Home() {
           <div className="grid gap-8 rounded-[2rem] border border-[var(--line)] bg-[var(--card)] p-8 md:grid-cols-2 md:items-center md:p-10">
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-[var(--copper)]">
-                How a {brand.name} is made
+                How it works
               </p>
-              <ol className="mt-6 space-y-4 text-[var(--muted)]">
-                <li>1. Tell us who it&apos;s for — son, daughter, spouse, parent, friend.</li>
-                <li>2. Approve the lyrics. Change any line.</li>
-                <li>3. Hear a 45-second preview. Checkout stays closed until it plays.</li>
-                <li>4. Pay once. Keep a private page to listen, download, and share.</li>
+              <ol className="mt-6 list-decimal space-y-4 pl-5 text-[var(--muted)]">
+                <li>Tell us who it&apos;s for.</li>
+                <li>Approve the lyrics — change any line.</li>
+                <li>Hear a short preview first. Buy only after you listen.</li>
+                <li>Pay once and get the full recording to keep and share.</li>
               </ol>
             </div>
             <div className="photo-frame relative aspect-[5/4]">
               <Image
                 src="/brand/mood-wedding.png"
-                alt="Wedding couple sharing a gift song beside a small cake"
+                alt="Wedding couple beside a small cake"
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -165,7 +162,7 @@ export default function Home() {
             <div className="relative min-h-[240px] md:min-h-full">
               <Image
                 src="/brand/mood-florist.png"
-                alt="Florist handing a SongSnuggle bouquet to a recipient"
+                alt="Florist handing a bouquet to a recipient"
                 fill
                 className="object-cover opacity-90"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -176,12 +173,11 @@ export default function Home() {
                 For florists &amp; photographers
               </p>
               <h2 className="serif mt-3 text-3xl md:text-4xl">
-                Add a song to the bouquet, the album, the day.
+                Offer a song with the flowers or the album.
               </h2>
               <p className="mt-4 text-[var(--paper)]/80">
-                {brand.name} is built as a gift object partners can offer beside flowers, prints,
-                and cakes — without turning your shop into a music studio. Clients get a free
-                preview; you stay the trusted door.
+                Your clients get a free preview. You stay the person they trust for the day. No
+                studio setup required.
               </p>
               <a
                 href={`mailto:${brand.supportEmail}?subject=${encodeURIComponent(
@@ -189,7 +185,7 @@ export default function Home() {
                 )}`}
                 className="mt-6 inline-flex w-fit rounded-full bg-[var(--copper)] px-5 py-3 text-white hover:bg-[var(--copper-dark)]"
               >
-                Open a partner conversation
+                Say hello
               </a>
             </div>
           </div>
@@ -201,35 +197,34 @@ export default function Home() {
             <div>
               <h3 className="font-semibold">Is the preview free?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                Yes. No card is required to draft lyrics or hear the preview. The full song is $
-                {brand.songPrice}. A printable lyric page is optional for ${brand.lyricsPrice}.
+                Yes. No card needed to draft lyrics or hear the preview. Full song is $
+                {brand.songPrice}. Optional lyric print is ${brand.lyricsPrice}.
               </p>
             </div>
             <div>
               <h3 className="font-semibold">Is this AI?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                Yes. Lyrics and music are generated with AI tools from the details you provide.
-                You edit and approve the words before we make the recording.
+                Yes. We use AI for lyrics and music from what you share. You edit and approve the
+                words before we make the recording.
               </p>
             </div>
             <div>
               <h3 className="font-semibold">How do I pay?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                One-time checkout. {brand.name} never stores card numbers.
+                One-time checkout. We never store your card.
               </p>
             </div>
             <div>
               <h3 className="font-semibold">What am I hearing?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                The preview sings your lyric lines as original generated music. Words highlight
-                as they are sung. It is not a human studio recording artist.
+                An AI-made preview of your song — not a live studio singer. Words light up as they
+                play.
               </p>
             </div>
             <div>
-              <h3 className="font-semibold">When does it arrive?</h3>
+              <h3 className="font-semibold">When do I get it?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                After payment, the full recording is released on a private page you can copy,
-                download, and email to yourself. A lyric print PDF is optional.
+                Right after you pay — a link to listen, download, and send. Lyric PDF is optional.
               </p>
             </div>
           </div>

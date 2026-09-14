@@ -57,9 +57,8 @@ export function SiteFooter() {
         </p>
       </div>
       <p className="mt-3 max-w-3xl text-xs leading-5">
-        Songs are created with AI lyric and music tools from the details you share. You review
-        lyrics before a preview is made. This is an original product, not affiliated with other
-        personalized-song brands.
+        Songs are made with AI from the details you share. You review the lyrics before we make
+        the preview.
       </p>
     </footer>
   );
