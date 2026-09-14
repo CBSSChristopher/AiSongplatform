@@ -17,6 +17,16 @@ This is an original listen-before-you-buy gift-song product. Public brand **Song
 
 `main` is still the empty initial commit. All product code is on the branch / PR above.
 
+
+## LOCK 2026-09-14 — EL quality bar
+
+- **EL Music Creator** is primary production path; **xAI only** as 402 paid_plan soft-fallback.
+- Audio: **stereo WAV** (`pcm_44100`).
+- Styles: **upbeat gift** defaults (pop/country/r&b/acoustic/jazz swing); lullaby stays soft/slow; jazz intimate only when occasion is explicitly intimate.
+- Create defaults: genre **`pop`**, voice **`female`** (male still selectable).
+- Quality bar = audit samples: `preview-el-pop-female`, `preview-el-pop-male`, `preview-el-country-female`, `preview-el-rnb-female`.
+
+
 ## Grok: clone this, not main
 
 ```bash

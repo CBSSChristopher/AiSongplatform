@@ -16,7 +16,11 @@ type GenerationChunk = {
 
 type WordStamp = { text: string; start: number; end: number };
 
-function genreStyles(genre: string): string[] {
+function isIntimateOccasion(occasion: string): boolean {
+  return ["anniversary", "wedding", "in-memory", "bedtime"].includes(occasion);
+}
+
+function genreStyles(genre: string, occasion = ""): string[] {
   switch (genre) {
     case "pop":
       return ["pop", "upbeat tempo", "energetic", "catchy hook", "polished production", "lively", "tight drums"];
@@ -29,9 +33,14 @@ function genreStyles(genre: string): string[] {
     case "worship":
       return ["worship", "reverent", "piano and pad", "hopeful"];
     case "lullaby":
+      // Intentionally soft/slow — do not energize lullabies.
       return ["lullaby", "soft and gentle", "slow tempo", "quiet intimacy"];
     case "jazz":
-      return ["jazz", "warm piano", "brushed drums", "intimate nightclub"];
+      // Default gift jazz is livelier; only lean intimate when occasion is explicitly intimate.
+      if (isIntimateOccasion(occasion)) {
+        return ["jazz", "warm piano", "brushed drums", "intimate nightclub", "clear vocals"];
+      }
+      return ["jazz", "upbeat swing", "lively", "swing rhythm", "clear vocals", "bright horns", "gift-song jazz", "energetic"];
     default:
       return ["acoustic folk", "warm guitar", "upbeat tempo", "energetic", "organic", "clear vocals"];
   }
@@ -45,7 +54,7 @@ function voiceStyles(voice: string): string[] {
 
 function positiveStyles(job: SongJob, section: string): string[] {
   const base = [
-    ...genreStyles(job.genre),
+    ...genreStyles(job.genre, job.occasion),
     ...voiceStyles(job.voice),
     "upbeat tempo",
     "energetic",
