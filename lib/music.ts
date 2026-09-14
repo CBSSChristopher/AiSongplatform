@@ -248,6 +248,33 @@ function normalize(samples: Float32Array) {
   for (let i = 0; i < samples.length; i += 1) samples[i] *= gain;
 }
 
+function pickSungLines(
+  lines: { text: string; section: LyricCue["section"] }[],
+  seconds: number,
+  recipientName: string,
+) {
+  if (seconds > 60 || lines.length <= 8) return lines;
+  const name = recipientName.trim().toLowerCase();
+  const chosen = new Map<number, (typeof lines)[number]>();
+  let verseTaken = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const hasName = Boolean(name) && line.text.toLowerCase().includes(name);
+    if (line.section === "chorus" || hasName) {
+      chosen.set(i, line);
+      continue;
+    }
+    if (verseTaken < 3) {
+      chosen.set(i, line);
+      verseTaken += 1;
+    }
+  }
+  if (chosen.size < 4) return lines;
+  return [...chosen.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, line]) => line);
+}
+
 function renderSong(job: SongJob, seconds: number) {
   const sampleRate = 22050;
   const total = Math.floor(sampleRate * seconds);
@@ -258,9 +285,10 @@ function renderSong(job: SongJob, seconds: number) {
   const bpm =
     job.genre === "lullaby" ? 70 : job.genre === "rock" ? 100 : job.genre === "worship" ? 74 : job.genre === "pop" ? 92 : 84;
   const beat = 60 / bpm;
-  const lines = sungLines(job.lyrics);
+  const lines = pickSungLines(sungLines(job.lyrics), seconds, job.recipientName);
   const cues: LyricCue[] = [];
   const motif = [0, 2, 4, 2, 3, 5, 4, 2, 1, 3, 2, 0];
+  const maxLine = seconds <= 48 ? 5.1 : 8.5;
 
   let t = beat * 2;
   for (let b = 0; b < 4 && b * beat < t; b += 1) {
@@ -277,7 +305,11 @@ function renderSong(job: SongJob, seconds: number) {
     const syllables = tokens.map((word) => ({ word, parts: splitSyllables(word) }));
     const totalSyl = syllables.reduce((sum, item) => sum + item.parts.length, 0);
     const beats = Math.max(3, totalSyl);
-    const duration = Math.min(beats * beat * (line.section === "chorus" ? 0.88 : 1), seconds - t - 0.5);
+    const duration = Math.min(
+      beats * beat * (line.section === "chorus" ? 0.88 : 1),
+      maxLine,
+      seconds - t - 0.5,
+    );
     const start = t;
     const end = start + duration;
     const lift = line.section === "chorus" ? 4 : line.section === "bridge" ? -2 : 0;

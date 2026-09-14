@@ -68,7 +68,21 @@ async function main() {
   }
   const rms = Math.sqrt(energy / Math.max(count, 1)) / 32767;
   if (rms < 0.02) throw new Error(`sung line too quiet: ${rms}`);
-  console.log("music_ok", cues.length, bytes.length, rms.toFixed(3));
+
+  const longJob: SongJob = {
+    ...job,
+    id: "music-test-long",
+    lyrics: `Verse 1
+${"Filler line about morning light\n".repeat(12)}Chorus
+This is a song I made for Maya
+Play it when you need me`,
+  };
+  const longCues = await writePreviewAudio(longJob);
+  if (!longCues.some((cue) => cue.text.includes("Maya"))) {
+    throw new Error("preview dropped the named chorus line");
+  }
+
+  console.log("music_ok", cues.length, bytes.length, rms.toFixed(3), "long", longCues.length);
 }
 
 main();
