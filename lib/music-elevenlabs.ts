@@ -19,13 +19,13 @@ type WordStamp = { text: string; start: number; end: number };
 function genreStyles(genre: string): string[] {
   switch (genre) {
     case "pop":
-      return ["pop", "catchy hook", "polished production", "warm keys"];
+      return ["pop", "upbeat tempo", "energetic", "catchy hook", "polished production", "lively", "tight drums"];
     case "country":
-      return ["country", "storytelling", "acoustic guitar", "warm twang"];
+      return ["country", "upbeat tempo", "energetic", "driving acoustic guitar", "lively two-step", "polished gift-song", "bright twang"];
     case "rnb":
-      return ["r&b", "smooth vocals", "soulful", "gentle groove"];
+      return ["r&b", "upbeat tempo", "energetic groove", "clear professional vocals", "tight production", "lively", "polished"];
     case "rock":
-      return ["soft rock", "electric guitar", "anthemic", "driving beat"];
+      return ["soft rock", "electric guitar", "anthemic", "driving beat", "upbeat tempo", "energetic"];
     case "worship":
       return ["worship", "reverent", "piano and pad", "hopeful"];
     case "lullaby":
@@ -33,7 +33,7 @@ function genreStyles(genre: string): string[] {
     case "jazz":
       return ["jazz", "warm piano", "brushed drums", "intimate nightclub"];
     default:
-      return ["acoustic folk", "warm guitar", "intimate", "organic"];
+      return ["acoustic folk", "warm guitar", "upbeat tempo", "energetic", "organic", "clear vocals"];
   }
 }
 
@@ -47,13 +47,19 @@ function positiveStyles(job: SongJob, section: string): string[] {
   const base = [
     ...genreStyles(job.genre),
     ...voiceStyles(job.voice),
+    "upbeat tempo",
+    "energetic",
+    "tight production",
+    "polished gift-song",
+    "clear professional vocals",
+    "lively",
     "great production quality",
     "clear lyrics",
     "heartfelt gift song",
   ];
-  if (section === "chorus") base.push("memorable chorus", "slightly bigger arrangement");
-  if (section === "bridge") base.push("reflective bridge", "softer dynamics");
-  if (section === "verse") base.push("conversational verse");
+  if (section === "chorus") base.push("memorable chorus", "slightly bigger arrangement", "punchy chorus");
+  if (section === "bridge") base.push("lifted bridge", "keep energy moving");
+  if (section === "verse") base.push("conversational verse", "forward momentum");
   return [...new Set(base)].slice(0, 50);
 }
 
@@ -95,7 +101,7 @@ export function buildCompositionPlan(job: SongJob, targetSeconds: number): { chu
       text,
       duration_ms,
       positive_styles: positiveStyles(job, section.section),
-      negative_styles: ["harsh distortion", "screaming", "explicit"],
+      negative_styles: ["harsh distortion", "screaming", "explicit", "sluggish", "lethargic", "slurred", "robotic", "mumbled", "sleepy", "dirge", "slow intimate ballad", "draggy tempo"],
       context_adherence: index === 0 ? "high" : "medium",
     };
   });
@@ -131,7 +137,11 @@ function readU16LE(buf: Uint8Array, offset: number) {
   return buf[offset] | (buf[offset + 1] << 8);
 }
 
-function encodePcm16Wav(pcm: Buffer, sampleRate: number) {
+/** Encode raw PCM16 LE into a WAV container. Default stereo — EL Music pcm_44100 is interleaved stereo. */
+function encodePcm16Wav(pcm: Buffer, sampleRate: number, channels = 2) {
+  // Labeling stereo PCM as mono doubles perceived duration and halves tempo (Joseph "too slow").
+  const ch = channels === 1 ? 1 : 2;
+  const blockAlign = ch * 2;
   const buffer = Buffer.alloc(44 + pcm.length);
   buffer.write("RIFF", 0);
   buffer.writeUInt32LE(36 + pcm.length, 4);
@@ -139,15 +149,31 @@ function encodePcm16Wav(pcm: Buffer, sampleRate: number) {
   buffer.write("fmt ", 12);
   buffer.writeUInt32LE(16, 16);
   buffer.writeUInt16LE(1, 20); // PCM
-  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt16LE(ch, 22);
   buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt32LE(sampleRate * blockAlign, 28);
+  buffer.writeUInt16LE(blockAlign, 32);
   buffer.writeUInt16LE(16, 34);
   buffer.write("data", 36);
   buffer.writeUInt32LE(pcm.length, 40);
   for (let i = 0; i < pcm.length; i += 1) buffer[44 + i] = pcm[i];
   return buffer;
+}
+
+/** Infer channel count for raw PCM16. Prefer stereo when duration match or API default. */
+function detectPcmChannels(pcm: Buffer, sampleRate: number, expectedDurationSec?: number): 1 | 2 {
+  if (expectedDurationSec && expectedDurationSec > 0 && pcm.length > 0) {
+    const monoSec = pcm.length / 2 / sampleRate;
+    const stereoSec = pcm.length / 4 / sampleRate;
+    if (Math.abs(stereoSec - expectedDurationSec) <= Math.abs(monoSec - expectedDurationSec)) {
+      return 2;
+    }
+    // Mono-labeled stereo looks ~2× the planned length.
+    if (monoSec > expectedDurationSec * 1.5) return 2;
+    return 1;
+  }
+  // ElevenLabs Music output_format=pcm_44100 is stereo PCM16 @ 44.1kHz.
+  return 2;
 }
 
 function isWav(buf: Uint8Array) {
@@ -308,15 +334,16 @@ async function parseMultipartMusic(response: Response): Promise<{ audio: Buffer;
   return { audio, meta };
 }
 
-function toWavBuffer(audio: Buffer): Buffer {
+function toWavBuffer(audio: Buffer, expectedDurationSec?: number): Buffer {
   if (isWav(audio)) return audio;
   if (isMp3(audio)) {
     throw new Error(
       "ElevenLabs returned MP3; pcm_44100 was unavailable. Convert to WAV is not supported on Workers — retry or check output_format.",
     );
   }
-  // Assume raw PCM 16-bit mono at 44100 when using pcm_44100.
-  return encodePcm16Wav(audio, PCM_RATE);
+  // Raw pcm_44100 from ElevenLabs Music is interleaved stereo PCM16 @ 44.1kHz.
+  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec);
+  return encodePcm16Wav(audio, PCM_RATE, channels);
 }
 
 async function composeMusic(
@@ -345,7 +372,8 @@ async function composeMusic(
 
   if (detailed.ok) {
     const parsed = await parseMultipartMusic(detailed);
-    wav = toWavBuffer(parsed.audio);
+    const expectedSec = compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
+    wav = toWavBuffer(parsed.audio, expectedSec);
     stamps = parseWordStamps(parsed.meta);
   } else {
     const detailedErr = await detailed.text().catch(() => "");
@@ -370,7 +398,8 @@ async function composeMusic(
             : "Music generation failed.";
       throw new Error(`ElevenLabs Music ${status}: ${hint} ${detail.slice(0, 240)}`);
     }
-    wav = toWavBuffer(Buffer.from(await plain.arrayBuffer()));
+    const expectedSec = compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
+    wav = toWavBuffer(Buffer.from(await plain.arrayBuffer()), expectedSec);
   }
 
   const duration = audioDurationSeconds(wav) || compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
