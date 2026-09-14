@@ -91,16 +91,36 @@ Point the bot at branch `cursor/hearloom-whop-platform-00d4`. Do not re-invite J
 
 Cloudflare: Joe needs Workers + DNS edit on zone `songsnuggle.com` to deploy. Secrets stay in the Worker (`wrangler secret put`), not the repo.
 
-Worker secrets (names only — values are already on Cloudflare):
+Worker secrets (names only — never paste values in chat; use Cursor secret card / terminal):
 
-- `WHOP_COMPANY_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `WHOP_WEBHOOK_SECRET`
-- `XAI_API_KEY` (xAI Grok TTS — required for sung preview/full audio)
+- `WHOP_COMPANY_API_KEY` (already on Worker)
+- `ANTHROPIC_API_KEY` (already on Worker)
+- `WHOP_WEBHOOK_SECRET` (already on Worker)
+- `XAI_API_KEY` (xAI Grok TTS — required for sung preview/full audio; already on Worker)
+- `RESEND_API_KEY` (**add** — delivery email soft-skips until set)
 
 `WHOP_COMPANY_ID` and plan IDs are non-secret vars in `wrangler.jsonc`.
 
-Optional later: `RESEND_API_KEY`, `RESEND_FROM`.
+### Resend delivery email (blocker 5)
+
+Email fires from `fulfillPaidJob` after successful unlock: Whop `payment.succeeded` webhook, local/demo unlock (`/api/demo-pay`), and FREESNUGGLE when that path is merged. Soft-fail: if Resend errors, unlock stays.
+
+Joe must add the secret on the Worker (do **not** paste the key in chat):
+
+```bash
+cd ~/src/AiSongplatform   # or the deploy checkout
+npx wrangler secret put RESEND_API_KEY
+# paste key when prompted (Resend dashboard → API Keys)
+```
+
+Optional From (default if unset: `SongSnuggle <hello@songsnuggle.com>`):
+
+```bash
+npx wrangler secret put RESEND_FROM
+# paste: SongSnuggle <hello@songsnuggle.com>
+```
+
+Domain verify: Resend → Domains → add `songsnuggle.com` → add the DNS records Resend shows → wait until verified before live sends from `hello@songsnuggle.com`. Until `RESEND_API_KEY` is set, unlock still works and logs that email was skipped.
 
 ## Stack and map
 
@@ -122,6 +142,7 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 | `lib/music-xai.ts` | xAI TTS `POST /v1/tts` singing tags → WAV + karaoke cues |
 | `lib/store.ts` | Local `data/` or Cloudflare D1 + KV |
 | `lib/fulfill.ts` | Shared paid fulfillment |
+| `lib/email.ts` | Resend delivery email after unlock |
 | `scripts/sync-whop.ts` | Create/update Whop product + webhook |
 | `wrangler.jsonc` | Worker, domain, D1, KV, public vars |
 
@@ -159,8 +180,8 @@ Do **not** run a live $39 pay-to-prove unless Court/Joe approve a refundable tes
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
-2. Add Worker secret `XAI_API_KEY` then redeploy so live preview uses Grok TTS sung vocals.
-3. Resend email from `hello@songsnuggle.com`.
+2. Studio-band music still a gap (live audio is Grok TTS singing + light synth bed, not Suno/full mix).
+3. Resend: code wired; Joe still needs `wrangler secret put RESEND_API_KEY` (+ domain verify for `hello@songsnuggle.com`).
 4. Merge PR `#2` into `main` (only if Court/Joe want that).
 
 ## Joe paste for Grok

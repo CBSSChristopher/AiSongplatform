@@ -21,4 +21,8 @@ interface CloudflareEnv {
   WHOP_WEBHOOK_SECRET?: string;
   XAI_API_KEY?: string;
   MUSIC_PROVIDER?: string;
+  /** Required for post-unlock delivery email. Put via: wrangler secret put RESEND_API_KEY */
+  RESEND_API_KEY?: string;
+  /** Optional. Default: SongSnuggle <hello@songsnuggle.com> (verify domain in Resend). */
+  RESEND_FROM?: string;
 }
