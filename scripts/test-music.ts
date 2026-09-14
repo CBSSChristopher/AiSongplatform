@@ -24,6 +24,7 @@ async function main() {
     lyricCues: [],
     includeLyricPrint: false,
     previewReady: false,
+  listenCompletedAt: null,
     fullReady: false,
     paidAt: null,
     whopPaymentId: null,

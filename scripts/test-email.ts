@@ -34,6 +34,7 @@ const job: SongJob = {
   lyricCues: [],
   includeLyricPrint: true,
   previewReady: true,
+  listenCompletedAt: null,
   fullReady: true,
   paidAt: new Date().toISOString(),
   whopPaymentId: "demo",

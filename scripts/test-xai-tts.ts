@@ -33,6 +33,7 @@ const job: SongJob = {
   lyricCues: [],
   includeLyricPrint: false,
   previewReady: false,
+  listenCompletedAt: null,
   fullReady: false,
   paidAt: null,
   whopPaymentId: null,
