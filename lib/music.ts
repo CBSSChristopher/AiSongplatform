@@ -1,6 +1,7 @@
 import { writeAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
 import { splitSyllables, sungLines } from "./lyric-parse";
+import { renderWithElevenLabs } from "./music-elevenlabs";
 import { renderWithXai } from "./music-xai";
 import type { SongJob } from "./types";
 
@@ -327,17 +328,20 @@ function renderInstrumentalBed(job: SongJob, seconds: number, sampleRate: number
   return samples;
 }
 
-function resolveMusicProvider(): "xai" | "synth" {
+function resolveMusicProvider(): "elevenlabs" | "xai" | "synth" {
   const forced = (process.env.MUSIC_PROVIDER || "").toLowerCase();
   if (forced === "synth" || forced === "formant") return "synth";
-  return "xai"; // production default — missing XAI_API_KEY must throw, never silent formant
+  if (forced === "xai" || forced === "grok") return "xai";
+  if (forced === "elevenlabs" || forced === "el") return "elevenlabs";
+  // Default gift path: real instrumental+vocal songs via ElevenLabs Music when key is present.
+  // xAI-first is prioritization elsewhere, not a ban — EL Music is the outside path for beautiful songs WITH music.
+  if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
+  if (process.env.XAI_API_KEY) return "xai";
+  // Production-shaped default when neither key is set: prefer EL so missing key fails loud with the right secret name.
+  return "elevenlabs";
 }
 
-async function renderForJob(job: SongJob, seconds: number) {
-  const provider = resolveMusicProvider();
-  if (provider === "synth") {
-    return renderSong(job, seconds);
-  }
+async function renderWithXaiAndBed(job: SongJob, seconds: number) {
   if (!process.env.XAI_API_KEY) {
     throw new Error(
       "Music provider is xAI Grok TTS, but XAI_API_KEY is not set. " +
@@ -357,6 +361,24 @@ async function renderForJob(job: SongJob, seconds: number) {
     console.error("[music] instrumental bed mix failed; serving a-cappella xAI vocals", error);
     return { wav: vocals.wav, cues: vocals.cues };
   }
+}
+
+async function renderForJob(job: SongJob, seconds: number) {
+  const provider = resolveMusicProvider();
+  if (provider === "synth") {
+    return renderSong(job, seconds);
+  }
+  if (provider === "elevenlabs") {
+    if (!process.env.ELEVENLABS_API_KEY) {
+      throw new Error(
+        "Music provider is ElevenLabs Music, but ELEVENLABS_API_KEY is not set. " +
+          "Add the Worker secret with: wrangler secret put ELEVENLABS_API_KEY " +
+          "(or set MUSIC_PROVIDER=xai with XAI_API_KEY, or MUSIC_PROVIDER=synth for local formant tests only).",
+      );
+    }
+    return renderWithElevenLabs(job, seconds);
+  }
+  return renderWithXaiAndBed(job, seconds);
 }
 
 export async function writePreviewAudio(job: SongJob) {
