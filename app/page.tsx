@@ -8,19 +8,31 @@ const moments = [
     title: "A kitchen dance",
     body: "Their name in the chorus. The Sunday pancake stubbornness in verse two. A keepsake you press play on — not another thing that sits in a drawer.",
     image: "/brand/mood-listen.png",
-    alt: "Two people listening to a gift song together at the kitchen table",
+    alt: "Parent and adult child sharing a gift song on a phone at the kitchen table",
   },
   {
     title: "Flowers, then a song",
     body: "Pair the bouquet with something they can keep after the petals fade. The gift object is the recording — private page, download, share.",
     image: "/brand/mood-florist.png",
-    alt: "Florist handing a linen-wrapped bouquet to a recipient",
+    alt: "Florist handing a bouquet with a SongSnuggle card to a recipient",
   },
   {
     title: "A blessing, kept",
     body: "Wedding aisle, bedtime, anniversary. Same craft. Different story. Photography of the day, song for the forever part.",
     image: "/brand/mood-wedding.png",
-    alt: "Couple in soft wedding light beside a linen cake table",
+    alt: "Wedding couple sharing earbuds and a gift song beside a small cake",
+  },
+  {
+    title: "Happy birthday, kept",
+    body: "Candles, faces, their name in the chorus. A party song they can press play on long after the cake is gone.",
+    image: "/brand/mood-birthday.png",
+    alt: "Family at a kids birthday table with cake and a phone ready to play a gift song",
+  },
+  {
+    title: "The walk across the stage",
+    body: "Graduation day gets a keepsake — family, the diploma, and a song that holds the feeling.",
+    image: "/brand/mood-graduation.png",
+    alt: "Graduate hugging family after commencement with diploma in hand",
   },
 ];
 
@@ -57,7 +69,7 @@ export default function Home() {
           <div className="photo-frame relative aspect-[4/5] md:aspect-[5/6]">
             <Image
               src="/brand/mood-listen.png"
-              alt="Two people sharing a gift song on a phone in soft linen light"
+              alt="Parent and adult child sharing a gift song on a phone in soft linen light"
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
@@ -78,7 +90,7 @@ export default function Home() {
             Think florist wrapping, photographer album, cake topper — then the song that belongs
             with the day. Photography-forward moments. The song is the object you leave with.
           </p>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {moments.map((moment) => (
               <article
                 key={moment.title}
@@ -118,7 +130,7 @@ export default function Home() {
             <div className="photo-frame relative aspect-[5/4]">
               <Image
                 src="/brand/mood-wedding.png"
-                alt="Wedding couple with keepsake cake table in warm light"
+                alt="Wedding couple sharing a gift song beside a small cake"
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -153,7 +165,7 @@ export default function Home() {
             <div className="relative min-h-[240px] md:min-h-full">
               <Image
                 src="/brand/mood-florist.png"
-                alt="Florist and recipient sharing a bouquet gift moment"
+                alt="Florist handing a SongSnuggle bouquet to a recipient"
                 fill
                 className="object-cover opacity-90"
                 sizes="(max-width: 768px) 100vw, 50vw"
