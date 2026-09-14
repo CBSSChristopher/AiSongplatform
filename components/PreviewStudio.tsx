@@ -20,7 +20,7 @@ export function PreviewStudio({ id }: { id: string }) {
     fetch(`/api/jobs/${id}`)
       .then(async (response) => {
         const json = (await response.json()) as { error?: string; job?: PublicSongJob };
-        if (!response.ok) throw new Error(json.error);
+        if (!response.ok) throw new Error(json.error || "Could not make preview.");
         setJob(json.job ?? null);
         setLyrics(json.job?.lyrics || "");
       })
@@ -72,7 +72,7 @@ export function PreviewStudio({ id }: { id: string }) {
         body: JSON.stringify({ lyrics }),
       });
       const json = (await response.json()) as { error?: string; job?: PublicSongJob };
-      if (!response.ok) throw new Error(json.error);
+      if (!response.ok) throw new Error(json.error || "Could not make preview.");
       setJob(json.job ?? null);
       setLocalListened(0);
     } catch (err) {
@@ -95,12 +95,12 @@ export function PreviewStudio({ id }: { id: string }) {
           body: JSON.stringify({ lyrics }),
         });
         const savedJson = (await saved.json()) as { error?: string; job?: PublicSongJob };
-        if (!saved.ok) throw new Error(savedJson.error);
+        if (!saved.ok) throw new Error(savedJson.error || "Could not save lyrics.");
         setJob(savedJson.job ?? null);
       }
       const response = await fetch(`/api/jobs/${id}/preview`, { method: "POST" });
       const json = (await response.json()) as { error?: string; job?: PublicSongJob };
-      if (!response.ok) throw new Error(json.error);
+      if (!response.ok) throw new Error(json.error || "Could not make preview.");
       setJob(json.job ?? null);
       setPlayWhenReady(true);
     } catch (err) {
