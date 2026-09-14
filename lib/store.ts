@@ -111,6 +111,31 @@ export async function getJob(id: string): Promise<SongJob | null> {
   return jobs.find((job) => job.id === id) ?? null;
 }
 
+
+export async function getJobByCheckoutSessionId(checkoutSessionId: string): Promise<SongJob | null> {
+  const id = String(checkoutSessionId || "").trim();
+  if (!id) return null;
+
+  const env = await cloudflareBindings();
+  if (env?.DB) {
+    // D1 has no JSON index; scan recent rows is not available — fall back to reading via json_extract if present.
+    try {
+      const row = await env.DB.prepare(
+        "SELECT json FROM jobs WHERE json_extract(json, '$.checkoutSessionId') = ? LIMIT 1",
+      )
+        .bind(id)
+        .first<{ json: string }>();
+      if (row?.json) return parseJob(row.json);
+    } catch {
+      // Older D1 schemas / SQLite without json_extract support — ignore and fall through.
+    }
+    return null;
+  }
+
+  const jobs = await readJobs();
+  return jobs.find((job) => job.checkoutSessionId === id) ?? null;
+}
+
 export async function updateJob(id: string, patch: Partial<SongJob>): Promise<SongJob | null> {
   const env = await cloudflareBindings();
   if (env?.DB) {

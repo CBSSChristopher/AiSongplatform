@@ -1,13 +1,12 @@
 import { unwrapWebhook } from "@whop/sdk/helpers";
-import { fulfillPaidJob } from "@/lib/fulfill";
-import { getJob } from "@/lib/store";
+import {
+  isPaidWhopEvent,
+  unlockJobFromWhopPayment,
+} from "@/lib/whop-unlock";
 
 type WhopEvent = {
   type?: string;
-  data?: {
-    id?: string;
-    metadata?: Record<string, unknown>;
-  };
+  data?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -24,15 +23,55 @@ export async function POST(request: Request) {
     return new Response("Invalid webhook", { status: 400 });
   }
 
-  if (event.type === "payment.succeeded") {
-    const jobId = String(event.data?.metadata?.job_id || "");
-    if (jobId) {
-      const job = await getJob(jobId);
-      if (job) {
-        await fulfillPaidJob(job, event.data?.id || null);
-      }
-    }
+  if (!isPaidWhopEvent(event.type)) {
+    return new Response("OK", { status: 200 });
   }
 
-  return new Response("OK", { status: 200 });
+  const result = await unlockJobFromWhopPayment(event.data);
+
+  if (result.ok) {
+    console.info(
+      JSON.stringify({
+        level: "info",
+        event: "whop_unlock_ok",
+        type: event.type,
+        jobId: result.jobId,
+        paymentId: result.paymentId,
+        already: result.already,
+      }),
+    );
+    return Response.json({
+      ok: true,
+      unlocked: true,
+      jobId: result.jobId,
+      already: result.already,
+    });
+  }
+
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event: "whop_unlock_failed",
+      type: event.type,
+      code: result.code,
+      retryable: result.retryable,
+      paymentId: result.paymentId,
+      candidates: result.candidates,
+      detail: result.detail,
+    }),
+  );
+
+  // Non-silent: never 200 without unlock on a paid event.
+  const status = result.code === "missing_job_id" ? 422 : result.code === "job_not_found" ? 404 : 500;
+  return Response.json(
+    {
+      ok: false,
+      unlocked: false,
+      error: result.code,
+      retryable: result.retryable,
+      candidates: result.candidates,
+      detail: result.detail,
+    },
+    { status },
+  );
 }

@@ -141,6 +141,21 @@ Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + K
 
 Without the public https webhook, a live payment can charge and **not** unlock.
 
+
+## Whop unlock / job_id (blocker 4)
+
+Checkout attaches `job_id` (also `jobId` + `custom_id`) on the Whop checkout configuration metadata, stores `checkoutSessionId`, and puts `?job=` on the redirect URL.
+
+Webhook `payment.succeeded` resolves the job from metadata / custom_id / `checkout_configuration_id` (lookup by stored session). Missing job_id returns **422** (not silent 200). Unlock is idempotent (`paidAt` + `fullReady`).
+
+**Prove without Joseph cash**
+
+1. Dry-run (no charge): `npm run test:whop-unlock`
+2. Promo: on checkout, enter **FREESNUGGLE** → `POST /api/demo-pay` unlocks the private `/song/[id]` page (logs `path: freesnuggle`).
+3. Local demo: with Whop keys unset / `DEMO_CHECKOUT=true`, use “Unlock full song (demo)”.
+
+Do **not** run a live $39 pay-to-prove unless Court/Joe approve a refundable test and log the spend. Live E2E after deploy remains a remaining gap until one paid+refunded purchase.
+
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
