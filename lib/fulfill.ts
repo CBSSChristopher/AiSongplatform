@@ -8,11 +8,12 @@ export async function fulfillPaidJob(job: SongJob, paymentId: string | null) {
     return job;
   }
 
-  await writeFullAudio(job);
+  const cues = await writeFullAudio(job);
   const next = await updateJob(job.id, {
     paidAt: new Date().toISOString(),
     fullReady: true,
     status: "delivered",
+    lyricCues: cues.length ? cues : job.lyricCues,
     whopPaymentId: paymentId ?? job.whopPaymentId,
   });
   const delivered = next ?? ((await getJob(job.id)) || job);

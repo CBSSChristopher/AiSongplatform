@@ -20,6 +20,7 @@ async function main() {
     senderName: "Dad",
     message: "",
     lyrics: "Verse 1\nYellow backpack by the door\n\nChorus\nThis is a song I made for Maya",
+    lyricCues: [],
     includeLyricPrint: true,
     previewReady: true,
     fullReady: true,

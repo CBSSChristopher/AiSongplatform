@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { LyricAudio } from "@/components/LyricAudio";
 import { SongDelivery } from "@/components/SongDelivery";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { getJob, publicJob } from "@/lib/store";
@@ -23,11 +24,12 @@ export default async function SongPage({
         {from ? <p className="mt-2 text-[var(--muted)]">From {from}</p> : null}
         {unlocked ? (
           <>
-            <audio className="mt-6 w-full" controls src={`/api/jobs/${id}/audio?full=1`} />
+            <LyricAudio
+              src={`/api/jobs/${id}/audio?full=1`}
+              cues={job.lyricCues || []}
+              fallbackLyrics={job.lyrics}
+            />
             <SongDelivery job={publicJob(job)} />
-            <pre className="mt-8 whitespace-pre-wrap rounded-3xl border border-[var(--line)] bg-[var(--card)] p-6">
-              {job.lyrics}
-            </pre>
           </>
         ) : (
           <p className="mt-6 text-[var(--muted)]">

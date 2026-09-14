@@ -15,10 +15,11 @@ export async function POST(
     return NextResponse.json({ error: "Approve lyrics before making a preview." }, { status: 400 });
   }
 
-  await writePreviewAudio({ ...job });
+  const cues = await writePreviewAudio({ ...job });
   const next = await updateJob(id, {
     previewReady: true,
     status: "preview",
+    lyricCues: cues,
   });
 
   return NextResponse.json({ job: next ? publicJob(next) : publicJob({ ...job, previewReady: true }) });

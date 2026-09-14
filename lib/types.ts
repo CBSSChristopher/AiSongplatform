@@ -1,4 +1,5 @@
 import type { GenreId, OccasionId, RelationshipId, VoiceId } from "./brand";
+import type { LyricCue } from "./cues";
 
 export type JobStatus =
   | "intake"
@@ -25,6 +26,7 @@ export type SongJob = {
   senderName: string;
   message: string;
   lyrics: string;
+  lyricCues: LyricCue[];
   includeLyricPrint: boolean;
   previewReady: boolean;
   fullReady: boolean;

@@ -18,6 +18,7 @@ const job = {
   senderName: "Dad",
   message: "I am proud of you",
   lyrics: "",
+  lyricCues: [],
   includeLyricPrint: false,
   previewReady: false,
   fullReady: false,

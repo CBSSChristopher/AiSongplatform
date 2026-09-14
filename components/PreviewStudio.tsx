@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { PublicSongJob } from "@/lib/types";
+import { LyricAudio } from "@/components/LyricAudio";
 
 export function PreviewStudio({ id }: { id: string }) {
   const router = useRouter();
@@ -11,7 +12,6 @@ export function PreviewStudio({ id }: { id: string }) {
   const [lyrics, setLyrics] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"save" | "preview" | null>(null);
-  const [audioKey, setAudioKey] = useState(0);
   const [canHear, setCanHear] = useState(false);
 
   useEffect(() => {
@@ -63,7 +63,6 @@ export function PreviewStudio({ id }: { id: string }) {
       const json = (await response.json()) as { error?: string; job?: PublicSongJob };
       if (!response.ok) throw new Error(json.error);
       setJob(json.job ?? null);
-      setAudioKey((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not make preview.");
     } finally {
@@ -113,17 +112,16 @@ export function PreviewStudio({ id }: { id: string }) {
         <h2 className="serif text-2xl">Hear it first</h2>
         {job.previewReady ? (
           <>
-            <audio
-              key={audioKey}
-              className="mt-4 w-full"
-              controls
+            <LyricAudio
+              key={job.updatedAt}
               src={`/api/jobs/${id}/audio`}
-              onPlay={() => setCanHear(true)}
-              onLoadedData={() => setCanHear(true)}
+              cues={job.lyricCues || []}
+              fallbackLyrics={job.lyrics}
+              onReady={() => setCanHear(true)}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
-              45-second instrumental preview so you can hear the shape of the song before you
-              pay. The full file continues the same recording.
+              The preview plays your lyric lines as a melody, in time. Words highlight as they
+              land. This is original music, not a studio singer.
             </p>
             <button
               type="button"
