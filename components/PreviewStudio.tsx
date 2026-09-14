@@ -13,6 +13,7 @@ export function PreviewStudio({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"save" | "preview" | null>(null);
   const [canHear, setCanHear] = useState(false);
+  const [playWhenReady, setPlayWhenReady] = useState(false);
 
   useEffect(() => {
     fetch(`/api/jobs/${id}`)
@@ -48,6 +49,7 @@ export function PreviewStudio({ id }: { id: string }) {
     setBusy("preview");
     setError("");
     setCanHear(false);
+    setPlayWhenReady(false);
     try {
       if (lyrics !== job?.lyrics) {
         const saved = await fetch(`/api/jobs/${id}/lyrics`, {
@@ -63,6 +65,7 @@ export function PreviewStudio({ id }: { id: string }) {
       const json = (await response.json()) as { error?: string; job?: PublicSongJob };
       if (!response.ok) throw new Error(json.error);
       setJob(json.job ?? null);
+      setPlayWhenReady(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not make preview.");
     } finally {
@@ -114,14 +117,15 @@ export function PreviewStudio({ id }: { id: string }) {
           <>
             <LyricAudio
               key={job.updatedAt}
-              src={`/api/jobs/${id}/audio`}
+              src={`/api/jobs/${id}/audio?t=${encodeURIComponent(job.updatedAt)}`}
               cues={job.lyricCues || []}
               fallbackLyrics={job.lyrics}
+              autoPlay={playWhenReady}
               onReady={() => setCanHear(true)}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
-              The preview plays your lyric lines as a melody, in time. Words highlight as they
-              land. This is original music, not a studio singer.
+              The preview sings your lyric lines over a backing track. Each word highlights as it
+              is sung. This is original generated music, not a studio recording artist.
             </p>
             <button
               type="button"

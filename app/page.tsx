@@ -119,8 +119,8 @@ export default function Home() {
             <div>
               <h3 className="font-semibold">What am I hearing?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                The preview is original music timed to your lyric lines. It is not a human
-                studio singer.
+                The preview sings your lyric lines as original generated music. Words highlight
+                as they are sung. It is not a human studio recording artist.
               </p>
             </div>
             <div>

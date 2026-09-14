@@ -117,7 +117,7 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 
 Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the key fails, lyrics silently fall back to the built-in template (line starts with “If a melody could hold a person”). Groq (lyric API) is **not** Grok (this bot).
 
-Music: the preview **follows the lyric script**. Each sung line gets a timed melody; the UI highlights that line while the audio plays. It is original generated music, not a studio vocal. Replace `lib/music.ts` and keep `writePreviewAudio` / `writeFullAudio` when adding Suno or similar.
+Music: `lib/music.ts` **sings the lyric script** with a formant vocal over a backing track. Word-level cues highlight in the player as they are sung. It is original generated music, not a studio vocal. Replace `lib/music.ts` and keep `writePreviewAudio` / `writeFullAudio` when adding Suno or similar.
 
 Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + KV. Disk will not persist on Workers.
 

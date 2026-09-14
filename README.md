@@ -100,7 +100,7 @@ SongSnuggle never stores cards. Whop handles checkout; the webhook unlocks the f
 
 ## Production music
 
-The included preview is a generated instrumental so the funnel works without a music API. When you add a Suno / Replicate / similar key, replace `lib/music.ts` and keep the same `writePreviewAudio` / `writeFullAudio` contract.
+The included preview sings the approved lyric lines with a generated vocal and backing track, timed so the on-screen words highlight as they are sung. When you add a Suno / Replicate / similar key, replace `lib/music.ts` and keep the same `writePreviewAudio` / `writeFullAudio` contract.
 
 ## Stack
 
