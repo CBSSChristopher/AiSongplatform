@@ -1,6 +1,10 @@
 import { writeAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
+import { splitSyllables, sungLines } from "./lyric-parse";
+import { renderWithElevenLabs } from "./music-elevenlabs";
 import type { SongJob } from "./types";
+
+export { splitSyllables, sungLines } from "./lyric-parse";
 
 function hashSeed(input: string) {
   let h = 2166136261;
@@ -62,67 +66,8 @@ function encodeWav(samples: Float32Array, sampleRate: number) {
   return buffer;
 }
 
-function sectionOf(header: string): LyricCue["section"] {
-  const value = header.toLowerCase();
-  if (value.includes("chorus")) return "chorus";
-  if (value.includes("bridge")) return "bridge";
-  return "verse";
-}
 
-export function sungLines(lyrics: string) {
-  const lines: { text: string; section: LyricCue["section"] }[] = [];
-  let section: LyricCue["section"] = "verse";
-  for (const raw of lyrics.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (/^(verse|chorus|bridge|final chorus|pre-chorus|outro)\b/i.test(line) && line.length < 48) {
-      section = sectionOf(line);
-      continue;
-    }
-    lines.push({ text: line.replace(/^[-*]\s+/, ""), section });
-  }
-  return lines;
-}
 
-export function splitSyllables(word: string): string[] {
-  const core = word.replace(/[^A-Za-z']/g, "");
-  if (!core) return [word];
-  const lower = core.toLowerCase();
-  const isVowel = (index: number) => {
-    const ch = lower[index];
-    if ("aeiou".includes(ch)) return true;
-    if (ch === "y") {
-      const prev = index > 0 ? lower[index - 1] : "";
-      return !"aeiou".includes(prev);
-    }
-    return false;
-  };
-  const groups: { start: number; end: number }[] = [];
-  let i = 0;
-  while (i < lower.length) {
-    if (isVowel(i)) {
-      const start = i;
-      while (i < lower.length && isVowel(i)) i += 1;
-      groups.push({ start, end: i });
-    } else {
-      i += 1;
-    }
-  }
-  if (groups.length <= 1) return [core];
-  const cuts = [0];
-  for (let g = 1; g < groups.length; g += 1) {
-    const consonants = groups[g].start - groups[g - 1].end;
-    const onset = consonants <= 1 ? consonants : 1;
-    cuts.push(groups[g].start - onset);
-  }
-  const parts: string[] = [];
-  for (let c = 0; c < cuts.length; c += 1) {
-    const end = c === cuts.length - 1 ? core.length : cuts[c + 1];
-    const part = core.slice(cuts[c], end);
-    if (part) parts.push(part);
-  }
-  return parts.length ? parts : [core];
-}
 
 function formantsFor(syllable: string): [number, number, number] {
   const seq = (syllable.toLowerCase().match(/[aeiouy]+/)?.[0] || "a").replace(/y/g, "i");
@@ -348,14 +293,37 @@ function renderSong(job: SongJob, seconds: number) {
   return { wav: encodeWav(samples, sampleRate), cues };
 }
 
+function resolveMusicProvider(): "elevenlabs" | "synth" {
+  const forced = (process.env.MUSIC_PROVIDER || "").toLowerCase();
+  if (forced === "synth" || forced === "formant") return "synth";
+  if (forced === "elevenlabs") return "elevenlabs";
+  if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
+  return "elevenlabs"; // production default — missing key must throw, never silent formant
+}
+
+async function renderForJob(job: SongJob, seconds: number) {
+  const provider = resolveMusicProvider();
+  if (provider === "synth") {
+    return renderSong(job, seconds);
+  }
+  if (!process.env.ELEVENLABS_API_KEY) {
+    throw new Error(
+      "Music provider is ElevenLabs, but ELEVENLABS_API_KEY is not set. " +
+        "Add the Worker secret with: wrangler secret put ELEVENLABS_API_KEY " +
+        "(or set MUSIC_PROVIDER=synth for local formant tests only).",
+    );
+  }
+  return renderWithElevenLabs(job, seconds);
+}
+
 export async function writePreviewAudio(job: SongJob) {
-  const { wav, cues } = renderSong(job, 48);
+  const { wav, cues } = await renderForJob(job, 45);
   await writeAudio(job.id, "preview", wav);
   return cues;
 }
 
 export async function writeFullAudio(job: SongJob) {
-  const { wav, cues } = renderSong(job, 150);
+  const { wav, cues } = await renderForJob(job, 135);
   await writeAudio(job.id, "full", wav);
   return cues;
 }

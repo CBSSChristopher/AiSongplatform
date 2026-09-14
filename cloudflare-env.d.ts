@@ -19,4 +19,6 @@ interface CloudflareEnv {
   WHOP_PLAN_ID_SONG: string;
   WHOP_PLAN_ID_BUNDLE: string;
   WHOP_WEBHOOK_SECRET?: string;
+  ELEVENLABS_API_KEY?: string;
+  MUSIC_PROVIDER?: string;
 }

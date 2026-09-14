@@ -3,6 +3,7 @@ import { readAudio } from "../lib/store";
 import type { SongJob } from "../lib/types";
 
 async function main() {
+  process.env.MUSIC_PROVIDER = "synth";
   const job: SongJob = {
     id: "music-test",
     createdAt: new Date().toISOString(),

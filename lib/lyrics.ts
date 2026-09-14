@@ -172,6 +172,11 @@ export async function generateLyrics(job: SongJob): Promise<string> {
   const provider = resolveLyricProvider();
   const prompt = lyricPrompt(job);
 
+  // Explicit test/dev only — never a silent production fallback after API failure.
+  if (provider === "template") {
+    return draftLyrics(job);
+  }
+
   try {
     if (provider === "openai") {
       const apiKey = process.env.OPENAI_API_KEY;
@@ -206,8 +211,11 @@ export async function generateLyrics(job: SongJob): Promise<string> {
     }
   } catch (error) {
     console.error("[lyrics]", provider, error);
-    return draftLyrics(job);
+    const detail = error instanceof Error ? error.message : "Unknown lyric provider error.";
+    throw new Error(
+      `Could not write lyrics (${provider}): ${detail} Please try again in a moment.`,
+    );
   }
 
-  return draftLyrics(job);
+  throw new Error(`Lyric provider "${provider}" is not configured.`);
 }

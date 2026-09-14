@@ -14,7 +14,8 @@
     "sync:whop": "tsx scripts/sync-whop.ts",
     "test:lyrics": "tsx scripts/test-lyrics.ts",
     "test:pdf": "tsx scripts/test-pdf.ts",
-    "test:music": "tsx scripts/test-music.ts"
+    "test:music": "tsx scripts/test-music.ts",
+    "test:elevenlabs-music": "tsx scripts/test-elevenlabs-music.ts"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",

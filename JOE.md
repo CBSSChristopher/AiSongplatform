@@ -96,6 +96,7 @@ Worker secrets (names only — values are already on Cloudflare):
 - `WHOP_COMPANY_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `WHOP_WEBHOOK_SECRET`
+- `ELEVENLABS_API_KEY` (ElevenLabs Music — required for sung preview/full audio)
 
 `WHOP_COMPANY_ID` and plan IDs are non-secret vars in `wrangler.jsonc`.
 
@@ -116,16 +117,17 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 | `app/api/checkout` | Creates Whop checkout session |
 | `app/api/webhooks/whop` | Unlocks after `payment.succeeded` |
 | `lib/brand.ts` | Name, prices, recipients, genres |
-| `lib/lyrics.ts` | Anthropic default; OpenAI/Groq optional; template fallback |
-| `lib/music.ts` | In-house WAV synth (instrumental, not vocals) |
+| `lib/lyrics.ts` | Anthropic default; OpenAI/Groq optional; template only if `LYRIC_PROVIDER=template` |
+| `lib/music.ts` | Routes to ElevenLabs Music or local formant synth |
+| `lib/music-elevenlabs.ts` | ElevenLabs Music `music_v2` composition plans → WAV |
 | `lib/store.ts` | Local `data/` or Cloudflare D1 + KV |
 | `lib/fulfill.ts` | Shared paid fulfillment |
 | `scripts/sync-whop.ts` | Create/update Whop product + webhook |
 | `wrangler.jsonc` | Worker, domain, D1, KV, public vars |
 
-Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the key fails, lyrics silently fall back to the built-in template (line starts with “If a melody could hold a person”). Groq (lyric API) is **not** Grok (this bot).
+Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the lyric API fails, the route returns **502** with a clear error — it does **not** silently substitute `draftLyrics`. Use `LYRIC_PROVIDER=template` only for local/dev. Groq (lyric API) is **not** Grok (this bot).
 
-Music: `lib/music.ts` **sings the lyric script** with a formant vocal over a backing track. Word-level cues highlight in the player as they are sung. It is original generated music, not a studio vocal. Replace `lib/music.ts` and keep `writePreviewAudio` / `writeFullAudio` when adding Suno or similar.
+Music: **ElevenLabs Music** when `ELEVENLABS_API_KEY` is set (production default). Uses `music_v2` composition_plan chunks from the job lyrics; preview ~45s, full ~135s; audio as WAV (`pcm_44100` preferred). Word/line cues come from API timestamps when available, otherwise evenly distributed across the audio duration. Formant synth (`lib/music.ts` `renderSong`) only when `MUSIC_PROVIDER=synth` for local tests — never a silent production fallback. Suno has no official self-serve API.
 
 Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + KV. Disk will not persist on Workers.
 
@@ -142,7 +144,7 @@ Without the public https webhook, a live payment can charge and **not** unlock.
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
-2. Sung vocals (preview now sings lyrics in-house; studio vocal still needs Suno or similar).
+2. Add Worker secret `ELEVENLABS_API_KEY` then redeploy so live preview uses ElevenLabs Music vocals.
 3. Resend email from `hello@songsnuggle.com`.
 4. Merge PR `#2` into `main` (only if Court/Joe want that).
 
