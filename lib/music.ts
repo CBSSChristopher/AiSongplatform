@@ -363,6 +363,16 @@ async function renderWithXaiAndBed(job: SongJob, seconds: number) {
   }
 }
 
+function isElevenLabsPaidPlanError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const lower = message.toLowerCase();
+  return (
+    /\b402\b/.test(message) ||
+    lower.includes("paid_plan_required") ||
+    lower.includes("not available for free")
+  );
+}
+
 async function renderForJob(job: SongJob, seconds: number) {
   const provider = resolveMusicProvider();
   if (provider === "synth") {
@@ -376,7 +386,19 @@ async function renderForJob(job: SongJob, seconds: number) {
           "(or set MUSIC_PROVIDER=xai with XAI_API_KEY, or MUSIC_PROVIDER=synth for local formant tests only).",
       );
     }
-    return renderWithElevenLabs(job, seconds);
+    try {
+      return await renderWithElevenLabs(job, seconds);
+    } catch (error) {
+      // Free EL Music returns HTTP 402 paid_plan_required — soft-fallback to xAI when available.
+      if (isElevenLabsPaidPlanError(error) && process.env.XAI_API_KEY) {
+        console.error(
+          "[music] ElevenLabs Music unavailable (paid plan); falling back to xAI.",
+          error instanceof Error ? error.message : error,
+        );
+        return renderWithXaiAndBed(job, seconds);
+      }
+      throw error;
+    }
   }
   return renderWithXaiAndBed(job, seconds);
 }
