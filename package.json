@@ -16,6 +16,7 @@
     "test:pdf": "tsx scripts/test-pdf.ts",
     "test:music": "tsx scripts/test-music.ts",
     "test:xai-tts": "tsx scripts/test-xai-tts.ts",
+    "test:elevenlabs-music": "tsx scripts/test-elevenlabs-music.ts",
     "test:whop-unlock": "tsx scripts/test-whop-unlock.ts",
     "test:email": "tsx scripts/test-email.ts"
   },
