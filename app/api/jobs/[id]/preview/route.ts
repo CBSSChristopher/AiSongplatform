@@ -29,7 +29,7 @@ export async function POST(
     const message =
       error instanceof Error ? error.message : "Could not create preview audio.";
     const status =
-      /ELEVENLABS_API_KEY|not set|missing/i.test(message)
+      /XAI_API_KEY|not set|missing/i.test(message)
         ? 502
         : /rate limit|429/i.test(message)
           ? 502

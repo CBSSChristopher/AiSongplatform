@@ -1,7 +1,7 @@
 import { writeAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
 import { splitSyllables, sungLines } from "./lyric-parse";
-import { renderWithElevenLabs } from "./music-elevenlabs";
+import { renderWithXai } from "./music-xai";
 import type { SongJob } from "./types";
 
 export { splitSyllables, sungLines } from "./lyric-parse";
@@ -293,12 +293,44 @@ function renderSong(job: SongJob, seconds: number) {
   return { wav: encodeWav(samples, sampleRate), cues };
 }
 
-function resolveMusicProvider(): "elevenlabs" | "synth" {
+function mixVocalWithBed(vocal: Float32Array, bed: Float32Array) {
+  const out = new Float32Array(vocal.length);
+  const n = Math.min(vocal.length, bed.length);
+  for (let i = 0; i < n; i += 1) {
+    out[i] = vocal[i] * 0.88 + bed[i] * 0.22;
+  }
+  for (let i = n; i < vocal.length; i += 1) out[i] = vocal[i] * 0.88;
+  normalize(out);
+  return out;
+}
+
+/** Soft instrumental-only bed (pads + light kick/hat). No formant vocals. */
+function renderInstrumentalBed(job: SongJob, seconds: number, sampleRate: number) {
+  const total = Math.max(1, Math.floor(sampleRate * Math.max(0.5, seconds)));
+  const samples = new Float32Array(total);
+  const random = rng(hashSeed(`${job.id}:bed:${job.genre}`));
+  const scale = genreScale(job.genre);
+  const bpm =
+    job.genre === "lullaby" ? 70 : job.genre === "rock" ? 100 : job.genre === "worship" ? 74 : job.genre === "pop" ? 92 : 84;
+  const beat = 60 / bpm;
+  const root = scale[0] - 12;
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root), 0.055);
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root + 7), 0.028);
+  addTone(samples, sampleRate, 0, seconds, midiToFreq(root + 12), 0.016);
+  for (let t = 0; t < seconds - 0.05; t += beat * 4) {
+    addTone(samples, sampleRate, t, Math.min(beat * 3.6, seconds - t), midiToFreq(root + 4), 0.02);
+  }
+  for (let t = 0; t < seconds - 0.02; t += beat) {
+    addKick(samples, sampleRate, t, 0.1);
+    addHat(samples, sampleRate, t + beat * 0.5, 0.03, random);
+  }
+  return samples;
+}
+
+function resolveMusicProvider(): "xai" | "synth" {
   const forced = (process.env.MUSIC_PROVIDER || "").toLowerCase();
   if (forced === "synth" || forced === "formant") return "synth";
-  if (forced === "elevenlabs") return "elevenlabs";
-  if (process.env.ELEVENLABS_API_KEY) return "elevenlabs";
-  return "elevenlabs"; // production default — missing key must throw, never silent formant
+  return "xai"; // production default — missing XAI_API_KEY must throw, never silent formant
 }
 
 async function renderForJob(job: SongJob, seconds: number) {
@@ -306,14 +338,25 @@ async function renderForJob(job: SongJob, seconds: number) {
   if (provider === "synth") {
     return renderSong(job, seconds);
   }
-  if (!process.env.ELEVENLABS_API_KEY) {
+  if (!process.env.XAI_API_KEY) {
     throw new Error(
-      "Music provider is ElevenLabs, but ELEVENLABS_API_KEY is not set. " +
-        "Add the Worker secret with: wrangler secret put ELEVENLABS_API_KEY " +
+      "Music provider is xAI Grok TTS, but XAI_API_KEY is not set. " +
+        "Add the Worker secret with: wrangler secret put XAI_API_KEY " +
         "(or set MUSIC_PROVIDER=synth for local formant tests only).",
     );
   }
-  return renderWithElevenLabs(job, seconds);
+  const vocals = await renderWithXai(job, seconds);
+  if (!vocals.samples.length || !vocals.sampleRate) {
+    return { wav: vocals.wav, cues: vocals.cues };
+  }
+  try {
+    const bed = renderInstrumentalBed(job, vocals.duration, vocals.sampleRate);
+    const mixed = mixVocalWithBed(vocals.samples, bed);
+    return { wav: encodeWav(mixed, vocals.sampleRate), cues: vocals.cues };
+  } catch (error) {
+    console.error("[music] instrumental bed mix failed; serving a-cappella xAI vocals", error);
+    return { wav: vocals.wav, cues: vocals.cues };
+  }
 }
 
 export async function writePreviewAudio(job: SongJob) {

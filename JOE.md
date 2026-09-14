@@ -96,7 +96,7 @@ Worker secrets (names only — values are already on Cloudflare):
 - `WHOP_COMPANY_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `WHOP_WEBHOOK_SECRET`
-- `ELEVENLABS_API_KEY` (ElevenLabs Music — required for sung preview/full audio)
+- `XAI_API_KEY` (xAI Grok TTS — required for sung preview/full audio)
 
 `WHOP_COMPANY_ID` and plan IDs are non-secret vars in `wrangler.jsonc`.
 
@@ -118,8 +118,8 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 | `app/api/webhooks/whop` | Unlocks after `payment.succeeded` |
 | `lib/brand.ts` | Name, prices, recipients, genres |
 | `lib/lyrics.ts` | Anthropic default; OpenAI/Groq optional; template only if `LYRIC_PROVIDER=template` |
-| `lib/music.ts` | Routes to ElevenLabs Music or local formant synth |
-| `lib/music-elevenlabs.ts` | ElevenLabs Music `music_v2` composition plans → WAV |
+| `lib/music.ts` | Routes to xAI Grok TTS (+ light synth bed) or local formant synth |
+| `lib/music-xai.ts` | xAI TTS `POST /v1/tts` singing tags → WAV + karaoke cues |
 | `lib/store.ts` | Local `data/` or Cloudflare D1 + KV |
 | `lib/fulfill.ts` | Shared paid fulfillment |
 | `scripts/sync-whop.ts` | Create/update Whop product + webhook |
@@ -127,7 +127,7 @@ Next.js 16 App Router, React 19, Tailwind 4, `@whop/sdk`, `@whop/checkout`, Open
 
 Lyrics: `LYRIC_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-opus-5`. If the lyric API fails, the route returns **502** with a clear error — it does **not** silently substitute `draftLyrics`. Use `LYRIC_PROVIDER=template` only for local/dev. Groq (lyric API) is **not** Grok (this bot).
 
-Music: **ElevenLabs Music** when `ELEVENLABS_API_KEY` is set (production default). Uses `music_v2` composition_plan chunks from the job lyrics; preview ~45s, full ~135s; audio as WAV (`pcm_44100` preferred). Word/line cues come from API timestamps when available, otherwise evenly distributed across the audio duration. Formant synth (`lib/music.ts` `renderSong`) only when `MUSIC_PROVIDER=synth` for local tests — never a silent production fallback. Suno has no official self-serve API.
+Music: **xAI Grok TTS** when `XAI_API_KEY` is set (production default, `MUSIC_PROVIDER=xai`). Honest gap: this is singing-style voice, **not** full instrumental music generation. Lyrics are wrapped in `<singing>` / `<sing-song>` and posted to `https://api.x.ai/v1/tts` with `with_timestamps: true` and `output_format.codec=wav`. Karaoke cues come from `audio_timestamps.graph_chars` + `graph_times` (speech tags skipped, remaining chars grouped into words). A soft formant/synth **instrumental bed** is mixed under the vocal; if mix fails, the gift is a-cappella WAV. Formant synth (`lib/music.ts` `renderSong`) only when `MUSIC_PROVIDER=synth` for local tests — never a silent production fallback. Missing `XAI_API_KEY` throws (preview 502). Production does **not** use `ELEVENLABS_API_KEY`. Suno has no official self-serve API.
 
 Local `next dev` uses `data/jobs.json` and `data/audio/`. Production uses D1 + KV. Disk will not persist on Workers.
 
@@ -144,7 +144,7 @@ Without the public https webhook, a live payment can charge and **not** unlock.
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
-2. Add Worker secret `ELEVENLABS_API_KEY` then redeploy so live preview uses ElevenLabs Music vocals.
+2. Add Worker secret `XAI_API_KEY` then redeploy so live preview uses Grok TTS sung vocals.
 3. Resend email from `hello@songsnuggle.com`.
 4. Merge PR `#2` into `main` (only if Court/Joe want that).
 
