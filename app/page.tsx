@@ -7,8 +7,8 @@ const moments = [
   {
     title: "A kitchen dance",
     body: "Their name in the chorus. The Sunday pancake stubbornness in verse two. A keepsake you press play on — not another thing that sits in a drawer.",
-    image: "/brand/mood-listen.png",
-    alt: "Parent and adult child sharing a gift song on a phone at the kitchen table",
+    image: "/brand/mood-kitchen.png",
+    alt: "Parent and child laughing together while baking in a linen kitchen",
   },
   {
     title: "Flowers, then a song",
@@ -32,7 +32,7 @@ const moments = [
     title: "A day worth a song",
     body: "Graduation day gets a keepsake — family, the diploma, and a song that holds the feeling.",
     image: "/brand/mood-graduation.png",
-    alt: "Graduate hugging family after commencement with diploma in hand",
+    alt: "Graduate in gown hugging family with diploma",
   },
 ];
 
