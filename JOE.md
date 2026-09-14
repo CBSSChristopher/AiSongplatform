@@ -77,9 +77,17 @@ Joe is Whop owner. He does not need the GitHub repo to finish checkout.
 
 No API keys in chat. Joe already owns the Whop company.
 
+## GitHub (locked in)
+
+Joe **is already a collaborator** on `CBSSChristopher/AiSongplatform`. GitHub user: **`PirateVentures`**. Role: **Write**.
+
+**Pro tip:** GitHub collaborators can only be added from the **GitHub website** (`github.com` → repo → Settings → Collaborators). The GitHub **mobile app cannot** add collaborators. Do not send Court back into the app for this.
+
+Still needed for Joe’s Cursor/Grok to push: Joe must accept the invite (if a mail is still pending) and grant the **Cursor GitHub app** access to this repo while logged in as `PirateVentures`.
+
 ## If Joe’s Grok bot will change code
 
-GitHub: invite Joe (write) to `CBSSChristopher/AiSongplatform`. Point the bot at branch `cursor/hearloom-whop-platform-00d4`.
+Point the bot at branch `cursor/hearloom-whop-platform-00d4`. Do not re-invite Joe unless `PirateVentures` has lost Write.
 
 Cloudflare: Joe needs Workers + DNS edit on zone `songsnuggle.com` to deploy. Secrets stay in the Worker (`wrangler secret put`), not the repo.
 
@@ -134,7 +142,7 @@ Without the public https webhook, a live payment can charge and **not** unlock.
 ## Not done yet
 
 1. One live $39 purchase + refund (required before ads).
-2. Sung vocals (still instrumental).
+2. Sung vocals (preview now sings lyrics in-house; studio vocal still needs Suno or similar).
 3. Resend email from `hello@songsnuggle.com`.
 4. Merge PR `#2` into `main` (only if Court/Joe want that).
 
