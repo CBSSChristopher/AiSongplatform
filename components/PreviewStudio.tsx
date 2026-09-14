@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { PublicSongJob } from "@/lib/types";
@@ -11,9 +11,10 @@ export function PreviewStudio({ id }: { id: string }) {
   const [job, setJob] = useState<PublicSongJob | null>(null);
   const [lyrics, setLyrics] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<"save" | "preview" | null>(null);
-  const [canHear, setCanHear] = useState(false);
+  const [busy, setBusy] = useState<"save" | "preview" | "listen" | null>(null);
   const [playWhenReady, setPlayWhenReady] = useState(false);
+  const [localListened, setLocalListened] = useState(0);
+  const persistingRef = useRef(false);
 
   useEffect(() => {
     fetch(`/api/jobs/${id}`)
@@ -25,6 +26,41 @@ export function PreviewStudio({ id }: { id: string }) {
       })
       .catch((err: Error) => setError(err.message));
   }, [id]);
+
+  const persistListen = useCallback(
+    async (listenedSeconds: number, durationSeconds: number) => {
+      if (persistingRef.current) return;
+      persistingRef.current = true;
+      setBusy("listen");
+      setError("");
+      try {
+        const response = await fetch(`/api/jobs/${id}/listen`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listenedSeconds, durationSeconds }),
+        });
+        const json = (await response.json()) as { error?: string; job?: PublicSongJob };
+        if (!response.ok) throw new Error(json.error || "Could not record listen proof.");
+        setJob(json.job ?? null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not record listen proof.");
+      } finally {
+        persistingRef.current = false;
+        setBusy(null);
+      }
+    },
+    [id],
+  );
+
+  const onListenProgress = useCallback(
+    (info: { listenedSeconds: number; durationSeconds: number; complete: boolean }) => {
+      setLocalListened(info.listenedSeconds);
+      if (!info.complete) return;
+      if (job?.listenCompletedAt) return;
+      void persistListen(info.listenedSeconds, info.durationSeconds);
+    },
+    [job?.listenCompletedAt, persistListen],
+  );
 
   async function saveLyrics() {
     setBusy("save");
@@ -38,6 +74,7 @@ export function PreviewStudio({ id }: { id: string }) {
       const json = (await response.json()) as { error?: string; job?: PublicSongJob };
       if (!response.ok) throw new Error(json.error || "Could not make preview.");
       setJob(json.job ?? null);
+      setLocalListened(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save lyrics.");
     } finally {
@@ -48,8 +85,8 @@ export function PreviewStudio({ id }: { id: string }) {
   async function makePreview() {
     setBusy("preview");
     setError("");
-    setCanHear(false);
     setPlayWhenReady(false);
+    setLocalListened(0);
     try {
       if (lyrics !== job?.lyrics) {
         const saved = await fetch(`/api/jobs/${id}/lyrics`, {
@@ -79,6 +116,15 @@ export function PreviewStudio({ id }: { id: string }) {
   if (!job) {
     return <p className="text-[var(--copper-dark)]">{error}</p>;
   }
+
+  const listened = Boolean(job.listenCompletedAt);
+  const checkoutLabel = listened
+    ? `Keep the whole song · $${brand.songPrice}`
+    : busy === "listen"
+      ? "Saving listen proof…"
+      : localListened > 0
+        ? "Keep playing to unlock checkout"
+        : "Play the preview to continue";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -121,7 +167,7 @@ export function PreviewStudio({ id }: { id: string }) {
               cues={job.lyricCues || []}
               fallbackLyrics={job.lyrics}
               autoPlay={playWhenReady}
-              onReady={() => setCanHear(true)}
+              onListenProgress={onListenProgress}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
               The preview sings your lyric lines over a backing track. Each word highlights as it
@@ -129,14 +175,17 @@ export function PreviewStudio({ id }: { id: string }) {
             </p>
             <button
               type="button"
-              disabled={!canHear}
+              disabled={!listened || busy !== null}
               onClick={() => router.push(`/checkout/${id}`)}
               className="mt-6 w-full rounded-full bg-[var(--ink)] px-4 py-3 text-white disabled:opacity-40"
             >
-              {canHear
-                ? `Keep the whole song · $${brand.songPrice}`
-                : "Play the preview to continue"}
+              {checkoutLabel}
             </button>
+            {!listened ? (
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                Checkout stays locked until the preview actually plays (not just loads).
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="mt-4 text-[var(--muted)]">
