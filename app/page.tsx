@@ -23,13 +23,13 @@ const moments = [
     alt: "Wedding couple sharing earbuds and a gift song beside a small cake",
   },
   {
-    title: "Happy birthday, kept",
+    title: "A birthday they can keep",
     body: "Candles, faces, their name in the chorus. A party song they can press play on long after the cake is gone.",
     image: "/brand/mood-birthday.png",
     alt: "Family at a kids birthday table with cake and a phone ready to play a gift song",
   },
   {
-    title: "The walk across the stage",
+    title: "A day worth a song",
     body: "Graduation day gets a keepsake — family, the diploma, and a song that holds the feeling.",
     image: "/brand/mood-graduation.png",
     alt: "Graduate hugging family after commencement with diploma in hand",
