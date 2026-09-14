@@ -72,7 +72,7 @@ export function draftLyrics(job: SongJob): string {
 }
 
 function lyricPrompt(job: SongJob) {
-  const genre = labelFor(genres, job.genre, "acoustic");
+  const genre = labelFor(genres, job.genre, "pop");
   return [
     "Write original gift-song lyrics a family would play more than once.",
     "Output lyrics only. No title, no commentary, no chord charts.",

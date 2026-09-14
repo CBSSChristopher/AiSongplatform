@@ -25,8 +25,8 @@ export const relationships = [
 ] as const;
 
 export const genres = [
-  { id: "acoustic", label: "Acoustic / Folk" },
   { id: "pop", label: "Pop" },
+  { id: "acoustic", label: "Acoustic / Folk" },
   { id: "country", label: "Country" },
   { id: "rnb", label: "R&B" },
   { id: "rock", label: "Rock" },
