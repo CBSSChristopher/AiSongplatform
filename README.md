@@ -2,6 +2,8 @@
 
 Public site: [songsnuggle.com](https://songsnuggle.com) (Cloudflare).
 
+**Joe / Grok:** start at [`JOE.md`](./JOE.md). Code lives on branch `cursor/hearloom-whop-platform-00d4`, not `main`.
+
 Personalized gift songs for families, milestones, and faith moments. Free preview, lyric approval, then a one-time Whop checkout.
 
 This is an original product that follows the same **listen-before-you-buy** pattern as other custom-song gifts. It is not a copy of another brand’s name, copy, or design.
