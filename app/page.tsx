@@ -13,7 +13,7 @@ const moments = [
   },
   {
     title: "A blessing, kept",
-    body: "Worship, bedtime, or a family milestone. Same funnel. Different story.",
+    body: "Worship, bedtime, or a family milestone. Same song. Different story.",
   },
 ];
 
@@ -113,22 +113,21 @@ export default function Home() {
             <div>
               <h3 className="font-semibold">How do I pay?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                Checkout runs through your Whop account. {brand.name} never stores card numbers.
+                One-time checkout. {brand.name} never stores card numbers.
               </p>
             </div>
             <div>
               <h3 className="font-semibold">What am I hearing?</h3>
               <p className="mt-2 text-[var(--muted)]">
-                Today&apos;s preview is an original instrumental generated for the funnel. It is
-                not a human singer. Sung audio comes next, after checkout is live.
+                The preview is an original instrumental made from your lyrics. It is not a
+                human singer.
               </p>
             </div>
             <div>
               <h3 className="font-semibold">When does it arrive?</h3>
               <p className="mt-2 text-[var(--muted)]">
                 After payment, the full recording is released on a private page you can copy,
-                download, and email to yourself. A lyric print PDF is optional. Demo mode
-                unlocks instantly so you can test before connecting Whop.
+                download, and email to yourself. A lyric print PDF is optional.
               </p>
             </div>
           </div>

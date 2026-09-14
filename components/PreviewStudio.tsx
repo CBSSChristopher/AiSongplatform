@@ -123,8 +123,7 @@ export function PreviewStudio({ id }: { id: string }) {
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
               45-second instrumental preview so you can hear the shape of the song before you
-              pay. Sung vocals are not in this version yet. The full file continues the same
-              recording.
+              pay. The full file continues the same recording.
             </p>
             <button
               type="button"
