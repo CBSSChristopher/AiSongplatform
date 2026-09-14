@@ -20,6 +20,7 @@ export function CheckoutPanel({ id }: { id: string }) {
   const [payload, setPayload] = useState<CheckoutResponse | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
   const total = brand.songPrice + (print ? brand.lyricsPrice : 0);
 
   function togglePrint(next: boolean) {
@@ -46,20 +47,23 @@ export function CheckoutPanel({ id }: { id: string }) {
     }
   }
 
-  async function demoPay() {
+  async function unlockWithCode(path: "demo" | "promo") {
     setBusy(true);
     setError("");
     try {
       const response = await fetch("/api/demo-pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: id }),
+        body: JSON.stringify({
+          jobId: id,
+          ...(path === "promo" ? { promoCode } : {}),
+        }),
       });
       const json = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(json.error);
+      if (!response.ok) throw new Error(json.error || "Unlock failed.");
       router.push(`/song/${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Demo unlock failed.");
+      setError(err instanceof Error ? err.message : "Unlock failed.");
       setBusy(false);
     }
   }
@@ -101,12 +105,11 @@ export function CheckoutPanel({ id }: { id: string }) {
       ) : payload.mode === "demo" ? (
         <div className="mt-6">
           <p className="text-sm text-[var(--muted)]">
-            Whop keys are not connected yet, so this unlocks in demo mode. Run
-            `npm run sync:whop` when you are ready to take live payments.
+            Whop keys are not connected yet, so this unlocks in demo mode.
           </p>
           <button
             type="button"
-            onClick={demoPay}
+            onClick={() => unlockWithCode("demo")}
             disabled={busy}
             className="mt-4 w-full rounded-full bg-[var(--ink)] px-4 py-3 text-white"
           >
@@ -125,6 +128,26 @@ export function CheckoutPanel({ id }: { id: string }) {
           />
         </div>
       )}
+      <div className="mt-6 rounded-2xl border border-dashed border-[var(--line)] p-4">
+        <p className="text-sm text-[var(--muted)]">Have a promo code?</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={promoCode}
+            onChange={(event) => setPromoCode(event.target.value)}
+            placeholder="Enter code"
+            className="min-w-0 flex-1 rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            onClick={() => unlockWithCode("promo")}
+            disabled={busy || !promoCode.trim()}
+            className="rounded-full bg-[var(--ink)] px-4 py-2 text-sm text-white disabled:opacity-40"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
       {error ? <p className="mt-4 text-sm text-[var(--copper-dark)]">{error}</p> : null}
     </div>
   );
