@@ -226,7 +226,7 @@ export function PreviewStudio({ id }: { id: string }) {
           <>
             <LyricAudio
               key={job.updatedAt}
-              src={`/api/jobs/${id}/audio?t=${encodeURIComponent(job.updatedAt)}`}
+              src={`/api/jobs/${id}/audio?format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
               cues={job.lyricCues || []}
               fallbackLyrics={job.lyrics}
               autoPlay={playWhenReady}

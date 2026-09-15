@@ -16,141 +16,298 @@ type GenerationChunk = {
 
 type WordStamp = { text: string; start: number; end: number };
 
-function isIntimateOccasion(occasion: string): boolean {
-  return ["anniversary", "wedding", "in-memory", "bedtime"].includes(occasion);
-}
-
-/** Heartfelt gift occasions — medium tempo, warm lead, not a race. */
+/** Heartfelt gift occasions — locked ballad pocket, not a race. */
 function isHeartfeltOccasion(occasion: string): boolean {
   return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
 }
 
-/**
- * Genre color only — tempo/energy comes from occasionStyles.
- * Avoid blanket "upbeat/energetic/lively" here (caused raced birthday previews).
- */
-function genreStyles(genre: string, occasion = ""): string[] {
-  switch (genre) {
-    case "pop":
-      return ["pop", "catchy hook", "polished production", "full band", "tight drums", "radio-ready"];
-    case "country":
-      return ["country", "warm acoustic guitar", "polished gift-song", "bright twang", "full band"];
-    case "rnb":
-      return ["r&b", "smooth groove", "clear professional vocals", "tight production", "polished", "full band"];
-    case "rock":
-      return ["soft rock", "electric guitar", "anthemic", "full band", "driving but measured"];
-    case "worship":
-      return ["worship", "reverent", "piano and pad", "hopeful", "clear lead vocal"];
-    case "lullaby":
-      return ["lullaby", "soft and gentle", "quiet intimacy", "sparse arrangement"];
-    case "jazz":
-      if (isIntimateOccasion(occasion)) {
-        return ["jazz", "warm piano", "brushed drums", "intimate nightclub", "clear vocals"];
-      }
-      return ["jazz", "swing rhythm", "clear vocals", "warm horns", "gift-song jazz", "full band"];
-    default:
-      return ["acoustic folk", "warm guitar", "organic", "clear vocals", "full arrangement"];
-  }
+function isMemorialOccasion(occasion: string): boolean {
+  return occasion === "in-memory";
 }
 
-function voiceStyles(voice: string): string[] {
-  if (voice === "male") return ["male vocals", "clear male singer", "expressive male lead"];
-  if (voice === "female") return ["female vocals", "clear female singer", "expressive female lead"];
-  return ["natural vocals", "expressive singer", "clear lead vocal"];
+function isLullabyJob(job: { genre: string; occasion: string }): boolean {
+  return job.genre === "lullaby" || job.occasion === "bedtime";
 }
 
-/** Occasion drives tempo — birthday dad→daughter must not race. */
-function occasionStyles(occasion: string, genre: string): string[] {
-  if (genre === "lullaby" || occasion === "bedtime") {
-    return ["slow tempo", "soft and gentle", "quiet intimacy", "tender"];
-  }
-  if (isIntimateOccasion(occasion)) {
-    return [
-      "medium-slow tempo",
-      "warm",
-      "intimate",
-      "clear lead vocal",
-      "emotional",
-      "polished gift-song",
-      "natural phrasing",
-      "not rushed",
-    ];
-  }
-  if (isHeartfeltOccasion(occasion)) {
-    return [
-      "medium tempo",
-      "warm",
-      "heartfelt",
-      "clear lead vocal",
-      "polished gift-song",
-      "full band",
-      "natural phrasing",
-      "not rushed",
+/** Einstein PERFECT LOCK v2 — exact strings; BPM token inside positive_styles only. */
+const SHARED_NEGATIVES = [
+  "upbeat",
+  "energetic",
+  "lively",
+  "rushed",
+  "double-time",
+  "racing tempo",
+  "frantic",
+  "too fast",
+  "chipmunk",
+  "sped-up vocals",
+  "hurried phrasing",
+  "off-beat phrasing",
+  "ahead of the beat",
+  "talk-sung",
+  "spoken-word",
+  "rap cadence",
+  "syllable stuffing",
+  "dance",
+  "club drop",
+  "EDM",
+  "screaming",
+  "harsh distortion",
+  "explicit",
+  "robotic",
+  "mumbled",
+  "slurred",
+  "dirge",
+  "lethargic",
+  "sleepy",
+  "draggy tempo",
+  "race tempo",
+  "two-step race",
+] as const;
+
+type PackEntry = { positive: string[]; negativeExtra: string[]; bpmToken: string };
+
+/** Pack keyed by genre|voice — wire EXACT v2 strings (no freestyle). */
+const HEARTFELT_PACK: Record<string, PackEntry> = {
+  "pop|female": {
+    bpmToken: "88 BPM",
+    positive: [
+      "pop ballad",
+      "soft contemporary pop",
+      "female vocals",
+      "clear female singer",
+      "warm intimate female lead",
       "singable melody",
-      "measured groove",
-    ];
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "88 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "soft drums",
+      "warm bass",
+      "gentle acoustic guitar",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "natural phrasing",
+    ],
+    negativeExtra: ["radio-ready race", "tight punchy drums", "catchy hook race", "anthemic shout"],
+  },
+  "pop|male": {
+    bpmToken: "88 BPM",
+    positive: [
+      "pop ballad",
+      "soft contemporary pop",
+      "male vocals",
+      "clear male singer",
+      "warm intimate male lead",
+      "singable melody",
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "88 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "soft drums",
+      "warm bass",
+      "gentle acoustic guitar",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "natural phrasing",
+    ],
+    negativeExtra: [
+      "radio-ready race",
+      "tight punchy drums",
+      "catchy hook race",
+      "anthemic shout",
+      "boy-band shout",
+    ],
+  },
+  "country|female": {
+    bpmToken: "86 BPM",
+    positive: [
+      "country ballad",
+      "warm country",
+      "female vocals",
+      "clear female singer",
+      "warm intimate female lead",
+      "singable melody",
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "86 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "warm acoustic guitar",
+      "gentle fingerpicking",
+      "soft brushed drums",
+      "warm pedal steel hint",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "storytelling verse",
+      "natural phrasing",
+    ],
+    negativeExtra: [
+      "lively two-step",
+      "honky-tonk race",
+      "driving acoustic guitar race",
+      "bright aggressive twang",
+      "line-dance",
+    ],
+  },
+  "rnb|female": {
+    bpmToken: "84 BPM",
+    positive: [
+      "r&b ballad",
+      "smooth contemporary r&b",
+      "female vocals",
+      "clear female singer",
+      "warm intimate female lead",
+      "singable melody",
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "84 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "smooth groove",
+      "soft kick",
+      "warm keys",
+      "gentle guitar",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "soulful but restrained",
+      "natural phrasing",
+    ],
+    negativeExtra: ["trap hats race", "club r&b", "energetic groove", "auto-tune chatter"],
+  },
+};
+
+function normalizeGenre(genre: string): string {
+  if (genre === "r&b" || genre === "rnb") return "rnb";
+  return genre || "pop";
+}
+
+function normalizeVoice(voice: string): "female" | "male" {
+  return voice === "male" ? "male" : "female";
+}
+
+function packKey(genre: string, voice: string): string {
+  return `${normalizeGenre(genre)}|${normalizeVoice(voice)}`;
+}
+
+function voiceSwapPositive(positive: string[], voice: "female" | "male"): string[] {
+  if (voice === "male") {
+    return positive.map((s) =>
+      s
+        .replace(/\bfemale vocals\b/g, "male vocals")
+        .replace(/\bclear female singer\b/g, "clear male singer")
+        .replace(/\bwarm intimate female lead\b/g, "warm intimate male lead"),
+    );
   }
-  // just-because / celebratory — feel-good without chipmunk/race
-  return [
-    "medium-up tempo",
-    "feel-good",
-    "polished gift-song",
-    "clear lead vocal",
-    "full band",
-    "great production quality",
-    "natural phrasing",
-  ];
+  return positive.map((s) =>
+    s
+      .replace(/\bmale vocals\b/g, "female vocals")
+      .replace(/\bclear male singer\b/g, "clear female singer")
+      .replace(/\bwarm intimate male lead\b/g, "warm intimate female lead"),
+  );
+}
+
+/** Exact pack hit, or voice-swap same genre, else pop|voice — never freestyle energy. */
+function resolveHeartfeltPack(genre: string, voice: string): PackEntry {
+  const key = packKey(genre, voice);
+  const hit = HEARTFELT_PACK[key];
+  if (hit) return hit;
+  const g = normalizeGenre(genre);
+  const v = normalizeVoice(voice);
+  const otherVoice = v === "male" ? "female" : "male";
+  const sameGenreOther = HEARTFELT_PACK[`${g}|${otherVoice}`];
+  if (sameGenreOther) {
+    return {
+      bpmToken: sameGenreOther.bpmToken,
+      positive: voiceSwapPositive(sameGenreOther.positive, v),
+      negativeExtra: [...sameGenreOther.negativeExtra],
+    };
+  }
+  const fallback = HEARTFELT_PACK[`pop|${v}`] || HEARTFELT_PACK["pop|female"];
+  return fallback;
+}
+
+function applyOverlay(pack: PackEntry, job: SongJob): PackEntry {
+  if (isLullabyJob(job)) {
+    const positive = pack.positive
+      .map((s) => (/\d+\s*BPM/i.test(s) ? "68 BPM" : s))
+      .concat(["sparse arrangement", "tender", "soft and gentle", "quiet intimacy"]);
+    return {
+      bpmToken: "68 BPM",
+      positive: [...new Set(positive)],
+      negativeExtra: [...pack.negativeExtra, "loud drums", "aggressive", "club drop"],
+    };
+  }
+  if (isMemorialOccasion(job.occasion)) {
+    const positive = pack.positive
+      .map((s) => (/\d+\s*BPM/i.test(s) ? "82 BPM" : s))
+      .concat(["reverent", "still melodic"]);
+    return {
+      bpmToken: "82 BPM",
+      positive: [...new Set(positive)],
+      negativeExtra: [...pack.negativeExtra],
+    };
+  }
+  return pack;
+}
+
+function packForJob(job: SongJob): PackEntry {
+  const base = resolveHeartfeltPack(job.genre || "pop", job.voice || "female");
+  return applyOverlay(base, job);
 }
 
 function negativeStylesFor(job: SongJob): string[] {
-  const base = [
-    "harsh distortion",
-    "screaming",
-    "explicit",
-    "slurred",
-    "robotic",
-    "mumbled",
-    "chipmunk",
-    "rushed",
-    "double-time",
-    "racing tempo",
-    "frantic",
-    "too fast",
-    "sped-up vocals",
-    "hurried phrasing",
-    "muddy mix",
-  ];
-  if (job.genre === "lullaby" || job.occasion === "bedtime") {
-    return [...base, "loud drums", "aggressive", "club drop"];
-  }
-  if (isIntimateOccasion(job.occasion) || isHeartfeltOccasion(job.occasion)) {
-    // Allow warm ballad energy; ban mush AND race.
-    return [...base, "dirge", "lethargic", "sleepy", "draggy tempo", "race tempo", "two-step race"];
-  }
-  return [...base, "sluggish", "lethargic", "sleepy", "dirge", "draggy tempo"];
+  const pack = packForJob(job);
+  return [...new Set([...SHARED_NEGATIVES, ...pack.negativeExtra])];
+}
+
+/** Exported for regression: birthday/heartfelt positives include BPM; ban race energy. */
+export function positiveStylesForJob(job: SongJob, _section = ""): string[] {
+  const pack = packForJob(job);
+  // First-chunk styles dominate; keep exact pack list (no freestyle section inventions).
+  return [...pack.positive];
+}
+
+export function bpmTokenForJob(job: SongJob): string {
+  return packForJob(job).bpmToken;
+}
+
+export function negativeStylesForJob(job: SongJob): string[] {
+  return negativeStylesFor(job);
 }
 
 function positiveStyles(job: SongJob, section: string): string[] {
-  const base = [
-    ...genreStyles(job.genre, job.occasion),
-    ...voiceStyles(job.voice),
-    ...occasionStyles(job.occasion, job.genre),
-    "tight production",
-    "clear professional vocals",
-    "great production quality",
-    "clear lyrics",
-    "heartfelt gift song",
-  ];
-  if (section === "chorus") {
-    base.push("memorable chorus", "slightly bigger arrangement", "warm lift");
-  }
-  if (section === "bridge") {
-    base.push("lifted bridge", "keep phrasing natural");
-  }
-  if (section === "verse") {
-    base.push("conversational verse", "storytelling verse");
-  }
-  return [...new Set(base)].slice(0, 50);
+  return positiveStylesForJob(job, section);
 }
 
 function clampDurationMs(ms: number) {
@@ -700,15 +857,32 @@ async function composeMusic(
   apiKey: string,
   lyrics: string,
   compositionPlan: { chunks: GenerationChunk[] },
-): Promise<{ wav: Buffer; cues: LyricCue[] }> {
+): Promise<{ wav: Buffer; mp3?: Buffer; cues: LyricCue[] }> {
   const body = {
     model_id: MODEL_ID,
     composition_plan: compositionPlan,
+    force_instrumental: false,
     with_timestamps: true,
   };
 
   let wav: Buffer | null = null;
+  let mp3: Buffer | undefined;
   let stamps: WordStamp[] = [];
+
+  // Parallel MP3 for iOS <audio> — Workers cannot run ffmpeg/lamejs in time.
+  const mp3Promise = fetch(`${API_BASE}?output_format=mp3_44100_128`, {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "audio/*, application/json",
+    },
+    body: JSON.stringify({
+      model_id: MODEL_ID,
+      composition_plan: compositionPlan,
+      force_instrumental: false,
+    }),
+  }).catch(() => null);
 
   const detailed = await fetch(`${API_BASE}/detailed?output_format=pcm_44100`, {
     method: "POST",
@@ -740,7 +914,7 @@ async function composeMusic(
         "Content-Type": "application/json",
         Accept: "audio/*, application/json",
       },
-      body: JSON.stringify({ model_id: MODEL_ID, composition_plan: compositionPlan }),
+      body: JSON.stringify({ model_id: MODEL_ID, composition_plan: compositionPlan, force_instrumental: false }),
     });
     if (!plain.ok) {
       const detail = (await plain.text()) || detailedErr;
@@ -785,7 +959,18 @@ async function composeMusic(
       ? cuesFromWordStamps(lyrics, usableStamps)
       : null;
   const cues = fromStamps ?? distributeCues(lyrics, duration);
-  return { wav, cues };
+
+  try {
+    const mp3Res = await mp3Promise;
+    if (mp3Res?.ok) {
+      const buf = Buffer.from(await mp3Res.arrayBuffer());
+      if (buf.byteLength > 512) mp3 = buf;
+    }
+  } catch {
+    // WAV master still saved; playback can fall back until backfill.
+  }
+
+  return { wav, mp3, cues };
 }
 
 export async function renderWithElevenLabs(job: SongJob, targetSeconds: number) {
