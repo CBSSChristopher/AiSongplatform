@@ -1110,6 +1110,10 @@ const VOCAL_FORCE_POSITIVES = [
   "vocal melody on top of the arrangement",
   "in-tune lead vocal",
   "clear lyrics",
+  "clear professional vocals",
+  "prominent lead vocal in the mix",
+  "vocals louder than the instruments",
+  "male singer singing the lyrics",
 ] as const;
 
 const VOCAL_FORCE_NEGATIVES = [
