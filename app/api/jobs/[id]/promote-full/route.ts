@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { LyricCue } from "@/lib/cues";
 import { cueSpanEnd, rescaleCuesToDuration, cuesNeedRescale } from "@/lib/cues";
 import { getJob, publicJob, readAudio, updateJob } from "@/lib/store";
+import { cuesWithSungWordsOnly, lyricsFromSungCues } from "@/lib/lyric-parse";
 import { resolveEncodedFullDurationSec } from "@/lib/true-duration";
 
 /**
@@ -60,12 +61,16 @@ export async function POST(
     }
   }
 
+  cues = cuesWithSungWordsOnly(cues);
+  const sungLyrics = cues.length ? lyricsFromSungCues(cues) : job.lyrics;
+
   const next = await updateJob(id, {
     paidAt: job.paidAt || new Date().toISOString(),
     fullReady: true,
     previewReady: true,
     status: "delivered",
     lyricCues: cues,
+    lyrics: sungLyrics,
     audioDurationSec: durationSec || null,
     ...(typeof body.songTitle === "string"
       ? { songTitle: body.songTitle.slice(0, 80) }

@@ -1,5 +1,5 @@
 import type { LyricCue, LyricWordCue } from "./cues";
-import { lyricSections, sungLines } from "./lyric-parse";
+import { displayLinesMissingFromSung, lyricSections, lyricsFromSungCues, sungLines } from "./lyric-parse";
 import type { SongJob } from "./types";
 
 const API_BASE = "https://api.elevenlabs.io/v1/music";
@@ -916,15 +916,19 @@ function cuesFromWordStamps(lyrics: string, stamps: WordStamp[]): LyricCue[] | n
     const tokens = line.text.split(/\s+/).filter(Boolean);
     if (!tokens.length) continue;
     const words: LyricWordCue[] = [];
-    for (const token of tokens) {
+    // Consume one stamp per script token for timing, but KEEP stamp.text (what EL sang).
+    // Overwriting with script tokens hid EL rewrites (fc06 fearlessly/Japan RCA).
+    for (const _token of tokens) {
       const stamp = stamps[cursor];
       if (!stamp) break;
-      words.push({ text: token, start: stamp.start, end: stamp.end });
+      const sung = (stamp.text || "").trim() || _token;
+      words.push({ text: sung, start: stamp.start, end: stamp.end });
       cursor += 1;
     }
     if (!words.length) continue;
+    const sungLine = words.map((w) => w.text).join(" ");
     cues.push({
-      text: line.text,
+      text: sungLine,
       start: words[0].start,
       end: words[words.length - 1].end,
       section: line.section,
@@ -1387,13 +1391,24 @@ export async function renderWithElevenLabs(job: SongJob, targetSeconds: number):
   let result = await composeMusic(apiKey, composeLyrics, plan);
   let presence = vocalPresenceFromWav(result.wav);
 
-  const isBad = () =>
-    !result.sungAligned ||
-    result.cues.length === 0 ||
-    looksInstrumentalOnly(result.wav, result.sungAligned);
+  const isBad = () => {
+    if (!result.sungAligned || result.cues.length === 0) return true;
+    if (looksInstrumentalOnly(result.wav, result.sungAligned)) return true;
+    // HARD: every script line must appear in sung word stamps (fc06 Mayan/high-road).
+    // Prefer recompose over silently dropping lines from display.
+    const scriptMissing = displayLinesMissingFromSung(composeLyrics, result.cues);
+    if (scriptMissing.length) {
+      console.error("[elevenlabs] script lines missing from sung stamps", {
+        count: scriptMissing.length,
+        sample: scriptMissing.slice(0, 3),
+      });
+      return true;
+    }
+    return false;
+  };
 
   // Up to 2 extra composes if spectral/sung gate fails (EL can return instrumental beds + stamps).
-  for (let retry = 1; retry <= 2 && isBad(); retry += 1) {
+  for (let retry = 1; retry <= 4 && isBad(); retry += 1) {
     console.error("[elevenlabs] compose lacked sung vocals — retrying with vocal force", {
       jobId: job.id,
       retry,

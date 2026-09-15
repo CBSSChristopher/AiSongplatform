@@ -1,4 +1,5 @@
 import { sendDeliveryEmail } from "./email";
+import { cuesWithSungWordsOnly, lyricsFromSungCues } from "./lyric-parse";
 import { writeFullAudio } from "./music";
 import { getJob, updateJob } from "./store";
 import type { SongJob } from "./types";
@@ -12,13 +13,16 @@ export async function fulfillPaidJob(job: SongJob, paymentId: string | null) {
     return job;
   }
 
-  const { cues, audioDurationSec } = await writeFullAudio(job);
+  const { cues: rawCues, audioDurationSec } = await writeFullAudio(job);
+  const cues = cuesWithSungWordsOnly(rawCues.length ? rawCues : job.lyricCues || []);
+  const sungLyrics = cues.length ? lyricsFromSungCues(cues) : job.lyrics;
   const next = await updateJob(job.id, {
     paidAt: new Date().toISOString(),
     fullReady: true,
     status: "delivered",
     lyricCues: cues.length ? cues : job.lyricCues,
-    audioDurationSec: audioDurationSec || job.audioDurationSec || null,
+    lyrics: sungLyrics,
+    audioDurationSec: audioDurationSec || null,
     whopPaymentId: paymentId ?? job.whopPaymentId,
   });
   const delivered = next ?? ((await getJob(job.id)) || job);

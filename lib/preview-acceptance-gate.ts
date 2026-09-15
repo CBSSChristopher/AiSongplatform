@@ -19,6 +19,7 @@ import {
   vocalPresenceFromWav,
 } from "./music-elevenlabs";
 import type { SongJob } from "./types";
+import { displayLinesMissingFromSung } from "./lyric-parse";
 
 /** MUSIC BAR v2 — heartfelt preview floor/default (Einstein G). */
 export const MUSIC_BAR_FLOOR_SEC = 60;
@@ -57,7 +58,8 @@ export type PreviewGateProofId =
   | "einstein_karaoke_only_if_sung_aligned"
   | "einstein_music_bar_duration"
   | "einstein_xai_same_rules"
-  | "einstein_el_music_sung_preview";
+  | "einstein_el_music_sung_preview"
+  | "einstein_display_lyrics_match_sung";
 
 export type PreviewGateProof = {
   id: PreviewGateProofId;
@@ -424,6 +426,41 @@ export function runPreviewAcceptanceGate(
           "einstein_vocal_on_published_bytes",
           "Vocal gate on published WAV passed with sung alignment.",
           { midFrac },
+        ),
+      );
+    }
+  }
+
+  // --- Display lyrics must match sung stamps (fc06: never show unsung script) ---
+  {
+    const display = (input.job.lyrics || "").trim();
+    const missing = display
+      ? displayLinesMissingFromSung(display, cues)
+      : [];
+    if (missing.length) {
+      proofs.push(
+        fail(
+          "einstein_display_lyrics_match_sung",
+          `Display lyric line(s) missing from sung word stamps (${missing.length}): ` +
+            missing
+              .slice(0, 3)
+              .map((l) => `"${l.slice(0, 72)}"`)
+              .join("; "),
+          { missingCount: missing.length, missing: missing.slice(0, 6) },
+        ),
+      );
+    } else if (display && cues.length) {
+      proofs.push(
+        ok(
+          "einstein_display_lyrics_match_sung",
+          "Every display lyric line appears in sung word stamps.",
+        ),
+      );
+    } else {
+      proofs.push(
+        fail(
+          "einstein_display_lyrics_match_sung",
+          "No display lyrics and/or cues to verify sung match.",
         ),
       );
     }

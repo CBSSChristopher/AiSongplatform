@@ -29,13 +29,15 @@ export async function POST(
   }
 
   try {
-    const { cues, audioDurationSec, previewGate } = await writePreviewAudio({ ...job });
+    const { cues, audioDurationSec, previewGate, lyrics: sungLyrics } =
+      await writePreviewAudio({ ...job });
     if (!previewGate.pass) {
       // Defense in depth — writePreviewAudio should have thrown.
       await updateJob(id, {
         previewReady: false,
         previewGate,
         lyricCues: cues,
+        lyrics: sungLyrics || job.lyrics,
         audioDurationSec: audioDurationSec || null,
       });
       return NextResponse.json(
@@ -54,6 +56,8 @@ export async function POST(
       listenCompletedAt: null,
       status: "preview",
       lyricCues: cues,
+      // Align display lyrics to sung cues — never keep unsung script after compose.
+      lyrics: sungLyrics || job.lyrics,
       audioDurationSec: audioDurationSec || null,
     });
 

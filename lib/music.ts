@@ -468,6 +468,8 @@ export async function writePreviewAudio(job: SongJob): Promise<{
   cues: import("./cues").LyricCue[];
   audioDurationSec: number;
   previewGate: import("./preview-acceptance-gate").PreviewGateResult;
+  /** Sung-aligned display lyrics (never unsung script). */
+  lyrics: string;
 }> {
   const seconds = previewTargetSeconds(job);
   const rendered = await renderForJob(job, seconds);
@@ -493,7 +495,15 @@ export async function writePreviewAudio(job: SongJob): Promise<{
 
   const audioDurationSec =
     audioDurationSeconds(wav) || Math.min(seconds, cueSpanEnd(cues) || seconds);
+  // Honesty: published WAV seconds only — never composition-plan target (fc06 120 vs 85).
   const duration = audioDurationSec > 1 ? audioDurationSec : seconds;
+
+  const { cuesWithSungWordsOnly, lyricsFromSungCues } = await import("./lyric-parse");
+  // Drop unsung cue shells (zero word stamps) — paid fc06 Mayan/high-road RCA.
+  cues = cuesWithSungWordsOnly(cues);
+  // Align display to what was sung; never keep unsung script lines on-screen.
+  const sungLyrics = cues.length ? lyricsFromSungCues(cues) : (job.lyrics || "");
+  const jobForGate = { ...job, lyrics: sungLyrics };
 
   const provider = rendered.provider || "unknown";
   const sungAligned = Boolean(
@@ -503,7 +513,7 @@ export async function writePreviewAudio(job: SongJob): Promise<{
   // Gate on the EXACT WAV bytes we will publish (single-compose source).
   // Einstein A: never write a sibling MP3 from a second compose.
   const previewGate = runPreviewAcceptanceGate({
-    job,
+    job: jobForGate,
     publishedWav: wav,
     publishedMp3: null,
     cues,
@@ -544,6 +554,7 @@ export async function writePreviewAudio(job: SongJob): Promise<{
     cues,
     audioDurationSec: duration,
     previewGate,
+    lyrics: sungLyrics,
   };
 }
 
@@ -597,6 +608,9 @@ export async function writeFullAudio(job: SongJob) {
         cues = [];
       }
     }
+    // Never ship unsung cue shells on paid full (fc06: Mayan / high-road).
+    const { cuesWithSungWordsOnly } = await import("./lyric-parse");
+    cues = cuesWithSungWordsOnly(cues);
   } catch (error) {
     console.error("[music] cue rescale after full write failed", error);
   }

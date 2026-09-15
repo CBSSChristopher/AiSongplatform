@@ -80,7 +80,8 @@ export function LyricAudio({
   }, [cap, encodedDurationSec, mediaDuration, cueEnd]);
 
   const fittedCues = useMemo(() => {
-    const list = cues || [];
+    // Never display unsung cue shells (zero word stamps) — fc06 Mayan/high-road.
+    const list = (cues || []).filter((c) => (c.words || []).length > 0);
     if (!list.length) return list;
     // Full play: fit to TRUE playable duration — never to inflated media alone.
     const target = playableDuration;
@@ -91,9 +92,12 @@ export function LyricAudio({
     return list;
   }, [cues, playableDuration]);
 
-  const [playSrc, setPlaySrc] = useState(src);
+  const [playSrc, setPlaySrc] = useState("");
+  const [buffering, setBuffering] = useState(true);
   const objectUrlRef = useRef<string | null>(null);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumeAtRef = useRef(0);
+  const wasPlayingRef = useRef(false);
 
   useEffect(() => {
     listenedRef.current = 0;
@@ -114,7 +118,8 @@ export function LyricAudio({
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;
     }
-    setPlaySrc(src);
+    setBuffering(true);
+    setPlaySrc("");
     const abs = src.startsWith("http") ? src : `${window.location.origin}${src}`;
     (async () => {
       try {
@@ -123,20 +128,26 @@ export function LyricAudio({
           cache: "no-store",
           headers: { Accept: "audio/mpeg,audio/*,*/*" },
         });
-        if (!res.ok || cancelled) return;
-        const buf = await res.arrayBuffer();
-        if (cancelled || buf.byteLength < 1024) return;
-        const url = URL.createObjectURL(
-          new Blob([buf], { type: res.headers.get("content-type") || "audio/mpeg" }),
-        );
-        if (cancelled) {
-          URL.revokeObjectURL(url);
+        if (!res.ok || cancelled) {
+          if (!cancelled) { setPlaySrc(src); setBuffering(false); }
           return;
         }
+        const buf = await res.arrayBuffer();
+        if (cancelled) return;
+        const ctype = res.headers.get("content-type") || "audio/mpeg";
+        // Large WAV: use Worker Range/CL fastpath. Small MP3: full blob buffer.
+        if (buf.byteLength < 1024 || buf.byteLength > 4_000_000) {
+          setPlaySrc(src);
+          setBuffering(false);
+          return;
+        }
+        const url = URL.createObjectURL(new Blob([buf], { type: ctype }));
+        if (cancelled) { URL.revokeObjectURL(url); return; }
         objectUrlRef.current = url;
         setPlaySrc(url);
+        setBuffering(false);
       } catch {
-        /* keep network src — Range fast-path still required */
+        if (!cancelled) { setPlaySrc(src); setBuffering(false); }
       }
     })();
     return () => {
@@ -283,13 +294,20 @@ export function LyricAudio({
 
   useEffect(() => {
     const node = audioRef.current;
-    if (!node) return;
+    if (!node || !playSrc) return;
+    const resumeAt = resumeAtRef.current;
+    const shouldResume = wasPlayingRef.current || autoPlay;
+    const onReady = () => {
+      try { if (resumeAt > 0.05) node.currentTime = resumeAt; } catch { /* ignore */ }
+      if (shouldResume) {
+        const attempt = node.play();
+        if (attempt) attempt.catch(() => setBlocked(true));
+      }
+      node.removeEventListener("loadeddata", onReady);
+    };
+    node.addEventListener("loadeddata", onReady);
     node.load();
-    if (!autoPlay) return;
-    const attempt = node.play();
-    if (attempt) {
-      attempt.catch(() => setBlocked(true));
-    }
+    return () => node.removeEventListener("loadeddata", onReady);
   }, [playSrc, autoPlay]);
 
   // JOSEPH LOCK: lyric sync / karaoke highlight DEFERRED — static lyrics text only.
@@ -300,15 +318,18 @@ export function LyricAudio({
 
   async function togglePlay() {
     const node = audioRef.current;
-    if (!node) return;
+    if (!node || !playSrc) return;
     if (node.paused) {
       try {
         await node.play();
+        wasPlayingRef.current = true;
         setBlocked(false);
       } catch {
         setBlocked(true);
       }
     } else {
+      resumeAtRef.current = node.currentTime || 0;
+      wasPlayingRef.current = false;
       node.pause();
     }
   }
@@ -319,13 +340,14 @@ export function LyricAudio({
         <button
           type="button"
           onClick={togglePlay}
+          disabled={buffering || !playSrc}
           className={
             gift
-              ? "rounded-full bg-[var(--copper)] px-7 py-3 text-base font-medium text-white shadow-sm"
-              : "rounded-full bg-[var(--copper)] px-5 py-2 text-white"
+              ? "rounded-full bg-[var(--copper)] px-7 py-3 text-base font-medium text-white shadow-sm disabled:opacity-50"
+              : "rounded-full bg-[var(--copper)] px-5 py-2 text-white disabled:opacity-50"
           }
         >
-          {playing ? "Pause" : gift ? "Play gift" : "Play song"}
+          {buffering ? "Loading…" : playing ? "Pause" : gift ? "Play gift" : "Play song"}
         </button>
         <p className="text-sm text-[var(--muted)]">
           {formatTime(time)}
@@ -348,7 +370,7 @@ export function LyricAudio({
         ref={audioRef}
         className={gift ? "sr-only" : "mt-3 w-full"}
         controls={!gift}
-        src={playSrc}
+        src={playSrc || undefined}
         preload="auto"
         playsInline
         onSeeked={() => {
