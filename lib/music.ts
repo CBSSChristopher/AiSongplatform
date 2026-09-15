@@ -199,7 +199,8 @@ function pickSungLines(
   seconds: number,
   recipientName: string,
 ) {
-  if (seconds > 60 || lines.length <= 8) return lines;
+  // Preview lengths (62–90s) still need chorus/name priority — do not burn time on filler verses.
+  if (seconds > 120 || lines.length <= 8) return lines;
   const name = recipientName.trim().toLowerCase();
   const chosen = new Map<number, (typeof lines)[number]>();
   let verseTaken = 0;
@@ -403,9 +404,27 @@ async function renderForJob(job: SongJob, seconds: number) {
   return renderWithXaiAndBed(job, seconds);
 }
 
+/** Einstein PERFECT LOCK v2: heartfelt ~70s (floor 60); dense lyrics ≳180 words → 80–90s. */
+export function isHeartfeltOccasion(occasion: string): boolean {
+  return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
+}
+
+export function previewTargetSeconds(job: SongJob): number {
+  const occasion = job.occasion || "";
+  const heartfelt =
+    isHeartfeltOccasion(occasion) || job.genre === "lullaby" || occasion === "bedtime";
+  if (!heartfelt) {
+    // Non-heartfelt still retire ~50s race; give ballad room at 62s floor band.
+    return 62;
+  }
+  const words = (job.lyrics || "").trim().split(/\s+/).filter(Boolean).length;
+  if (words >= 180) return 85; // dense 80–90 band
+  return 70; // default heartfelt
+}
+
 export async function writePreviewAudio(job: SongJob) {
-  // ~50s: heartfelt phrasing room without raced 45s; still a true preview length.
-  const { wav, cues } = await renderForJob(job, 50);
+  const seconds = previewTargetSeconds(job);
+  const { wav, cues } = await renderForJob(job, seconds);
   await writeAudio(job.id, "preview", wav);
   return cues;
 }
