@@ -56,7 +56,7 @@ async function main() {
     title: `${brand.name} personalized song`,
     headline: brand.tagline,
     description:
-      "A personalized gift song with a free preview, lyric approval, and email delivery after payment.",
+      "A personalized SongSnuggle gift song with a free preview, lyric approval, and email delivery after payment. By paying you agree to SongSnuggle Terms at https://songsnuggle.com/terms",
     visibility: "visible" as const,
   };
 
