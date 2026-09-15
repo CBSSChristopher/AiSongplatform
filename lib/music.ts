@@ -1,4 +1,4 @@
-import { writeAudio } from "./store";
+import { writeAudio, deleteAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
 import { cueSpanEnd, rescaleCuesToDuration } from "./cues";
 import { splitSyllables, sungLines } from "./lyric-parse";
@@ -459,6 +459,9 @@ export async function writePreviewAudio(job: SongJob): Promise<{
   if (rendered.mp3 && rendered.mp3.byteLength > 0) {
     const mp3 = Buffer.from(truncateMp3ToSeconds(new Uint8Array(rendered.mp3), seconds));
     await writeAudio(job.id, "preview", mp3, "mp3");
+  } else {
+    // a16 RCA: never leave a stale instrumental MP3 in KV when this render is wav-only (xAI).
+    await deleteAudio(job.id, "preview", "mp3");
   }
   const audioDurationSec =
     audioDurationSeconds(wav) || Math.min(seconds, cueSpanEnd(cues) || seconds);

@@ -217,6 +217,24 @@ export async function readAudio(
   }
 }
 
+export async function deleteAudio(
+  jobId: string,
+  kind: "preview" | "full",
+  format: "wav" | "mp3" = "wav",
+) {
+  const env = await cloudflareBindings();
+  if (env?.AUDIO) {
+    await env.AUDIO.delete(audioKey(jobId, kind, format));
+    return;
+  }
+  try {
+    const { unlink } = await import("node:fs/promises");
+    await unlink(audioPath(jobId, kind, format));
+  } catch {
+    /* missing is fine */
+  }
+}
+
 function enqueue(work: () => Promise<void>) {
   writeChain = writeChain.then(work, work);
   return writeChain;
