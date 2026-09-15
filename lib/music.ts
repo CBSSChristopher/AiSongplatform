@@ -404,7 +404,8 @@ async function renderForJob(job: SongJob, seconds: number) {
 }
 
 export async function writePreviewAudio(job: SongJob) {
-  const { wav, cues } = await renderForJob(job, 45);
+  // ~55s gives heartfelt birthday phrasing room (avoid raced 45s previews).
+  const { wav, cues } = await renderForJob(job, 55);
   await writeAudio(job.id, "preview", wav);
   return cues;
 }
