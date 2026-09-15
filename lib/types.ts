@@ -15,6 +15,8 @@ export type SongJob = {
   updatedAt: string;
   status: JobStatus;
   recipientName: string;
+  /** Optional how-to-say-it guide for singing; never used as lyric spelling. */
+  namePronunciation: string;
   relationship: RelationshipId | "";
   email: string;
   marketingOptIn: boolean;

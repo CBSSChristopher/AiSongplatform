@@ -12,6 +12,7 @@ function baseJob(over: Partial<SongJob>): SongJob {
     updatedAt: new Date().toISOString(),
     status: "preview",
     recipientName: "Ma-lee-ya",
+    namePronunciation: "",
     relationship: "daughter",
     email: "a@b.c",
     marketingOptIn: false,

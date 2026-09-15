@@ -18,6 +18,7 @@ const job: SongJob = {
   updatedAt: new Date().toISOString(),
   status: "preview",
   recipientName: "Maya",
+  namePronunciation: "",
   relationship: "daughter",
   email: "a@b.c",
   marketingOptIn: false,

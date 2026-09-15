@@ -15,6 +15,7 @@ const steps = ["Person", "Sound", "Story", "Message", "Review"] as const;
 
 type FormState = {
   recipientName: string;
+  namePronunciation: string;
   relationship: string;
   email: string;
   marketingOptIn: boolean;
@@ -30,6 +31,7 @@ type FormState = {
 
 const empty: FormState = {
   recipientName: "",
+  namePronunciation: "",
   relationship: "",
   email: "",
   marketingOptIn: false,
@@ -64,7 +66,7 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
   function validateStep() {
     if (step === 0) {
       if (!form.relationship) return "Choose who this is for.";
-      if (!form.recipientName.trim()) return "Add the name we should sing.";
+      if (!form.recipientName.trim()) return "Add their name as you’d write it on a card.";
       if (!form.email.includes("@")) return "Add the email for your private song link.";
     }
     return "";
@@ -132,12 +134,29 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
             ))}
           </div>
           <label className="block">
-            <span className="text-sm">The name to sing</span>
+            <span className="text-sm">Their name</span>
+            <span className="mt-0.5 block text-sm text-[var(--muted)]">
+              As you’d write it on a card or gift tag
+            </span>
             <input
               className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-3"
-              placeholder="Maya, or Alina (ah-LEE-na)"
+              placeholder="Malia"
               value={form.recipientName}
               onChange={(event) => set("recipientName", event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm">How to say it <span className="text-[var(--muted)]">(optional)</span></span>
+            <span className="mt-0.5 block text-sm text-[var(--muted)]">
+              Only if it might be misheard when sung — we’ll keep the written spelling in the lyrics
+            </span>
+            <input
+              className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-3"
+              placeholder="mah-LEE-yah"
+              value={form.namePronunciation}
+              onChange={(event) => set("namePronunciation", event.target.value)}
+              autoComplete="off"
             />
           </label>
           <label className="block">
@@ -264,7 +283,7 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
             </div>
             <input
               className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-3"
-              placeholder="e.g. For Maliya, Today"
+              placeholder="e.g. For Malia, Today"
               value={form.songTitle}
               onChange={(event) => set("songTitle", event.target.value)}
               maxLength={80}
@@ -298,9 +317,12 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
           <h1 className="serif text-3xl">One last look</h1>
           <dl className="space-y-2 text-sm">
             <div>For {form.recipientName || "—"} · {form.relationship || "—"}</div>
+            {form.namePronunciation.trim() ? (
+              <div className="text-[var(--muted)]">Said like {form.namePronunciation.trim()}</div>
+            ) : null}
             <div>Sound {form.genre} · {form.voice}</div>
             <div>Occasion {form.occasion}</div>
-            <div>Title {form.songTitle.trim() || "Untitled (we’ll use their name)"}</div>
+            <div>Title {form.songTitle.trim() || "We’ll use their name"}</div>
             <div className="text-[var(--muted)]">{form.memories || "No memory added yet."}</div>
           </dl>
           <p className="text-sm text-[var(--muted)]">

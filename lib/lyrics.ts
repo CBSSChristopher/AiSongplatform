@@ -83,6 +83,7 @@ function lyricPrompt(job: SongJob, options?: { fresh?: boolean }) {
         ]
       : []),
     "Craft rules:",
+    "- Spell the recipient name in lyrics EXACTLY as written (gift spelling). Never write phonetic guides like Ma-lee-ya into lyric lines.",
     "- Put the recipient first name in the chorus. Use it naturally, not every line.",
     "- Build verses from the supplied memory, qualities, and message. Specifics beat compliments.",
     "- Do not invent last names, ages, cities, illnesses, deaths, or facts they did not give.",
@@ -94,7 +95,13 @@ function lyricPrompt(job: SongJob, options?: { fresh?: boolean }) {
     "- Final chorus can add one small lift, then land on the gift message.",
     "- English only. No copyrighted lyrics or famous melodies described.",
     "",
-    `Recipient name: ${job.recipientName || "not given"}`,
+    `Recipient name (spell exactly this way in every lyric line): ${job.recipientName || "not given"}`,
+    ...(clean(job.namePronunciation || "")
+      ? [
+          `How to pronounce when singing (guide only — do NOT put this phonetic spelling in the lyrics): ${clean(job.namePronunciation)}`,
+          `Pronounce the name like: ${clean(job.namePronunciation)} when singing; spell it in lyrics as: ${clean(job.recipientName) || "the written name"}.`,
+        ]
+      : []),
     `Relationship: ${labelFor(relationships, job.relationship, "loved one")}`,
     `Occasion: ${labelFor(occasions, job.occasion, "just because")}`,
     `Genre: ${genre}`,
@@ -107,7 +114,7 @@ function lyricPrompt(job: SongJob, options?: { fresh?: boolean }) {
 }
 
 const systemPrompt =
-  "You are a gifted personal songwriter. You write original lyrics that sound like one specific person, not a greeting card. Never copy existing songs.";
+  "You are a gifted personal songwriter. You write original lyrics that sound like one specific person, not a greeting card. Never copy existing songs. Always spell the recipient's name as written for a gift card or title. If a pronunciation guide is provided, treat it as singing advice only — never substitute hyphenated phonetics into the lyric text.";
 
 async function generateOpenAICompatible(options: {
   apiKey: string;

@@ -9,6 +9,7 @@ async function main() {
     updatedAt: new Date().toISOString(),
     status: "delivered",
     recipientName: "Maya",
+    namePronunciation: "",
     relationship: "daughter",
     email: "a@b.c",
     marketingOptIn: false,

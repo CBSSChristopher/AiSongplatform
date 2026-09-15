@@ -286,16 +286,42 @@ function packForJob(job: SongJob): PackEntry {
   return applyOverlay(base, job);
 }
 
+function nameEnunciationOverlays(job: SongJob): { positive: string[]; negativeExtra: string[] } {
+  const written = (job.recipientName || "").trim();
+  const guide = (job.namePronunciation || "").trim();
+  // Only when a pronunciation guide is present — never leak phonetics into lyric chunk text.
+  if (!guide) return { positive: [], negativeExtra: [] };
+  const label = written || "the name";
+  return {
+    positive: [
+      `clear enunciation of the name ${label}`,
+      `pronounce ${label} carefully`,
+      "distinct syllables for the name",
+      `pronounce the name like ${guide} when singing`,
+      `clear enunciation guided by ${guide}`,
+    ],
+    negativeExtra: [
+      "mumbled name",
+      "rushed name",
+      "slurred name",
+      "wrong name",
+      "phonetic spelling sung as lyrics",
+    ],
+  };
+}
+
 function negativeStylesFor(job: SongJob): string[] {
   const pack = packForJob(job);
-  return [...new Set([...SHARED_NEGATIVES, ...pack.negativeExtra])];
+  const overlays = nameEnunciationOverlays(job);
+  return [...new Set([...SHARED_NEGATIVES, ...pack.negativeExtra, ...overlays.negativeExtra])];
 }
 
 /** Exported for regression: birthday/heartfelt positives include BPM; ban race energy. */
 export function positiveStylesForJob(job: SongJob, _section = ""): string[] {
   const pack = packForJob(job);
-  // First-chunk styles dominate; keep exact pack list (no freestyle section inventions).
-  return [...pack.positive];
+  // First-chunk styles dominate; keep exact pack list, then optional name enunciation overlays.
+  const overlays = nameEnunciationOverlays(job);
+  return [...new Set([...pack.positive, ...overlays.positive])];
 }
 
 export function bpmTokenForJob(job: SongJob): string {

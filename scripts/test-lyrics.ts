@@ -7,6 +7,7 @@ const job = {
   updatedAt: "",
   status: "lyrics",
   recipientName: "Maya",
+  namePronunciation: "",
   relationship: "daughter",
   email: "a@b.c",
   marketingOptIn: false,

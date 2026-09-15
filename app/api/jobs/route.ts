@@ -13,6 +13,7 @@ const ids = {
 export async function POST(request: Request) {
   const body = (await request.json()) as Record<string, unknown>;
   const recipientName = String(body.recipientName || "").trim();
+  const namePronunciation = String(body.namePronunciation || "").trim().slice(0, 120);
   const email = String(body.email || "").trim();
   const relationship = String(body.relationship || "");
   const genre = String(body.genre || "");
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
   const occasion = String(body.occasion || "");
 
   if (!recipientName) {
-    return NextResponse.json({ error: "A name to sing is required." }, { status: 400 });
+    return NextResponse.json({ error: "Add their name as you’d write it on a card." }, { status: 400 });
   }
   if (!email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
 
   const job = await createJob({
     recipientName,
+    namePronunciation,
     email,
     relationship: relationship as never,
     genre: genre as never,

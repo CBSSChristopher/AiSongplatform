@@ -20,6 +20,7 @@ const job: SongJob = {
   updatedAt: new Date().toISOString(),
   status: "delivered",
   recipientName: "Maya",
+  namePronunciation: "",
   relationship: "daughter",
   email: "buyer@example.com",
   marketingOptIn: false,
