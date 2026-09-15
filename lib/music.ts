@@ -434,9 +434,16 @@ export async function writePreviewAudio(job: SongJob): Promise<{
   const { cuesLookEqualSliced } = await import("./cues");
   const wav = Buffer.from(truncateWavToSeconds(new Uint8Array(rendered.wav), seconds));
   let cues = (rendered.cues || []).filter((c) => c.start < seconds);
-  // a16 RCA: EL instrumental left equal-time fake word slices. Refuse empty cues;
+  // a16 RCA: refuse instrumental beds (even with hallucinated stamps) and empty cues;
   // strip equal-sliced WORD timings (ban fake karaoke slices) — keep line highlights.
+  const { looksInstrumentalOnly, vocalPresenceFromWav } = await import("./music-elevenlabs");
   const equalSliced = cuesLookEqualSliced(cues);
+  const presence = vocalPresenceFromWav(wav);
+  if (looksInstrumentalOnly(wav, !equalSliced && cues.length > 0)) {
+    throw new Error(
+      `NO_VOCAL_PREVIEW: instrumental-only preview (midFrac=${presence.midFrac.toFixed(3)}, hiFrac=${presence.hiFrac.toFixed(3)}) — refusing publish.`,
+    );
+  }
   if (!cues.length) {
     throw new Error(
       "NO_VOCAL_PREVIEW: preview has no lyric cues — refusing to publish.",

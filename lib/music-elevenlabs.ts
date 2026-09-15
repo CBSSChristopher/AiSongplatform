@@ -1133,15 +1133,60 @@ export function injectVocalForce(plan: { chunks: GenerationChunk[] }): { chunks:
 }
 
 /**
- * Rough vocal presence from WAV PCM: mid(300–3400Hz)-ish energy via simple
- * differentiator (highpass proxy) vs lowpassed energy. Instrumental beds
- * (a16) score midFrac ≪ sung refs.
+ * FINDINGS-style band energy (a16 RCA): mean over 1s windows of
+ * low80–300 / mid300–3400 / hi3400–8k fraction of |FFT|² at 16kHz.
+ * Instrumental beds: mid≲0.23–0.30, hi≈0; sung refs: mid≳0.32, hi≳0.02.
  */
-export function vocalPresenceFromWav(wav: Uint8Array): { midFrac: number; rms: number } {
-  if (wav.byteLength < 64) return { midFrac: 0, rms: 0 };
+function fftRadix2(re: Float64Array, im: Float64Array) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i += 1) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i]!;
+      re[i] = re[j]!;
+      re[j] = tr;
+      const ti = im[i]!;
+      im[i] = im[j]!;
+      im[j] = ti;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wlenRe = Math.cos(ang);
+    const wlenIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let wRe = 1;
+      let wIm = 0;
+      for (let j = 0; j < len / 2; j += 1) {
+        const uRe = re[i + j]!;
+        const uIm = im[i + j]!;
+        const vRe = re[i + j + len / 2]! * wRe - im[i + j + len / 2]! * wIm;
+        const vIm = re[i + j + len / 2]! * wIm + im[i + j + len / 2]! * wRe;
+        re[i + j] = uRe + vRe;
+        im[i + j] = uIm + vIm;
+        re[i + j + len / 2] = uRe - vRe;
+        im[i + j + len / 2] = uIm - vIm;
+        const nWRe = wRe * wlenRe - wIm * wlenIm;
+        wIm = wRe * wlenIm + wIm * wlenRe;
+        wRe = nWRe;
+      }
+    }
+  }
+}
+
+export function vocalPresenceFromWav(wav: Uint8Array): {
+  midFrac: number;
+  lowFrac: number;
+  hiFrac: number;
+  rms: number;
+} {
+  const empty = { midFrac: 0, lowFrac: 1, hiFrac: 0, rms: 0 };
+  if (wav.byteLength < 64) return empty;
   const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
   if (view.getUint32(0, false) !== 0x52494646 || view.getUint32(8, false) !== 0x57415645) {
-    return { midFrac: 0, rms: 0 };
+    return empty;
   }
   let offset = 12;
   let channels = 1;
@@ -1150,7 +1195,12 @@ export function vocalPresenceFromWav(wav: Uint8Array): { midFrac: number; rms: n
   let dataOffset = -1;
   let dataBytes = 0;
   while (offset + 8 <= wav.byteLength) {
-    const id = String.fromCharCode(wav[offset]!, wav[offset + 1]!, wav[offset + 2]!, wav[offset + 3]!);
+    const id = String.fromCharCode(
+      wav[offset]!,
+      wav[offset + 1]!,
+      wav[offset + 2]!,
+      wav[offset + 3]!,
+    );
     const size = view.getUint32(offset + 4, true);
     if (id === "fmt ") {
       channels = view.getUint16(offset + 10, true) || 1;
@@ -1163,42 +1213,84 @@ export function vocalPresenceFromWav(wav: Uint8Array): { midFrac: number; rms: n
     }
     offset += 8 + size + (size % 2);
   }
-  if (dataOffset < 0 || bits !== 16 || dataBytes < sampleRate) return { midFrac: 0, rms: 0 };
-  const samples = Math.floor(dataBytes / 2);
-  const step = Math.max(1, Math.floor(channels)); // read first channel every frame
-  let sumSq = 0;
-  let lowSq = 0;
-  let midSq = 0;
-  let prev = 0;
-  let low = 0;
-  // One-pole lowpass ~200Hz + highpass residual as mid proxy.
-  const alpha = Math.exp((-2 * Math.PI * 200) / sampleRate);
-  const start = Math.min(samples, sampleRate); // skip ~1s
-  const end = Math.min(samples, sampleRate * 40);
-  let n = 0;
-  for (let i = start; i < end; i += step) {
-    const s = view.getInt16(dataOffset + i * 2, true) / 32768;
-    low = alpha * low + (1 - alpha) * s;
-    const mid = s - low; // highpassed-ish
-    sumSq += s * s;
-    lowSq += low * low;
-    midSq += mid * mid;
-    prev = s;
-    n += 1;
+  if (dataOffset < 0 || bits !== 16 || dataBytes < sampleRate) return empty;
+
+  const frames = Math.floor(dataBytes / 2 / channels);
+  const mono = new Float64Array(frames);
+  for (let f = 0; f < frames; f += 1) {
+    let s = 0;
+    for (let c = 0; c < channels; c += 1) {
+      s += view.getInt16(dataOffset + (f * channels + c) * 2, true) / 32768;
+    }
+    mono[f] = s / channels;
   }
-  if (!n) return { midFrac: 0, rms: 0 };
-  const total = lowSq + midSq + 1e-12;
-  return { midFrac: midSq / total, rms: Math.sqrt(sumSq / n) };
+
+  const sr = 16000;
+  const outLen = Math.floor((mono.length * sr) / sampleRate);
+  const x = new Float64Array(outLen);
+  for (let i = 0; i < outLen; i += 1) {
+    const src = (i * sampleRate) / sr;
+    const i0 = Math.floor(src);
+    const i1 = Math.min(mono.length - 1, i0 + 1);
+    const t = src - i0;
+    x[i] = mono[i0]! * (1 - t) + mono[i1]! * t;
+  }
+
+  const win = sr;
+  let fftSize = 1;
+  while (fftSize < win) fftSize <<= 1;
+  const lows: number[] = [];
+  const mids: number[] = [];
+  const his: number[] = [];
+  let sumSq = 0;
+  let nSamp = 0;
+
+  for (let start = 0; start + win <= x.length; start += win) {
+    const re = new Float64Array(fftSize);
+    const im = new Float64Array(fftSize);
+    for (let i = 0; i < win; i += 1) {
+      const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (win - 1));
+      re[i] = x[start + i]! * w;
+      sumSq += x[start + i]! * x[start + i]!;
+      nSamp += 1;
+    }
+    fftRadix2(re, im);
+    let low = 0;
+    let mid = 0;
+    let hi = 0;
+    for (let k = 0; k < fftSize / 2; k += 1) {
+      const freq = (k * sr) / fftSize;
+      const mag2 = re[k]! * re[k]! + im[k]! * im[k]!;
+      if (freq >= 80 && freq < 300) low += mag2;
+      else if (freq >= 300 && freq < 3400) mid += mag2;
+      else if (freq >= 3400 && freq < 8000) hi += mag2;
+    }
+    const tot = low + mid + hi + 1e-12;
+    lows.push(low / tot);
+    mids.push(mid / tot);
+    his.push(hi / tot);
+  }
+  if (!mids.length) return empty;
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  return {
+    lowFrac: avg(lows),
+    midFrac: avg(mids),
+    hiFrac: avg(his),
+    rms: nSamp ? Math.sqrt(sumSq / nSamp) : 0,
+  };
 }
 
-/** Instrumental-only / no-sung-voice heuristic (paired with missing word stamps). */
+/**
+ * Instrumental-only (a16): bass-heavy bed even when EL returns lyric timestamps.
+ * Calibrated: a16 mid≈0.23–0.30; maya/pop/country mid≳0.32 with hi≳0.02.
+ */
 export function looksInstrumentalOnly(wav: Uint8Array, sungAligned: boolean): boolean {
-  if (sungAligned) return false;
-  const { midFrac, rms } = vocalPresenceFromWav(wav);
-  // Loud bed + weak mid + no alignment ⇒ instrumental (a16 midFrac ~0.05–0.15).
-  if (rms > 0.04 && midFrac < 0.22) return true;
-  if (!sungAligned && rms > 0.02) return true; // no stamps on audible audio
-  return !sungAligned;
+  const { midFrac, lowFrac, hiFrac, rms } = vocalPresenceFromWav(wav);
+  if (!(rms > 0.02)) return true;
+  if (midFrac < 0.32) return true;
+  if (midFrac < 0.36 && lowFrac > 0.6 && hiFrac < 0.01) return true;
+  if (!sungAligned && midFrac < 0.38) return true;
+  return false;
 }
 
 export type ElevenLabsRender = {
