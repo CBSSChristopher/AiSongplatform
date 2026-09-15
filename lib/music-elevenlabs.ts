@@ -1312,33 +1312,32 @@ export async function renderWithElevenLabs(job: SongJob, targetSeconds: number):
   if (!apiKey) {
     throw new Error("ELEVENLABS_API_KEY is missing. Add it with: wrangler secret put ELEVENLABS_API_KEY");
   }
-  let plan = buildCompositionPlan(job, targetSeconds);
+  // Always inject vocal-force styles on the plan (Einstein B) — still force_instrumental false.
+  let plan = injectVocalForce(buildCompositionPlan(job, targetSeconds));
   let result = await composeMusic(apiKey, job.lyrics, plan);
+  let presence = vocalPresenceFromWav(result.wav);
 
-  const bad =
-    !result.sungAligned ||
-    looksInstrumentalOnly(result.wav, result.sungAligned) ||
-    result.cues.length === 0;
-
-  if (bad) {
-    console.error("[elevenlabs] first compose lacked sung alignment/vocals — retrying with vocal force", {
-      jobId: job.id,
-      sungAligned: result.sungAligned,
-      stampCount: result.stampCount,
-      cues: result.cues.length,
-      presence: vocalPresenceFromWav(result.wav),
-    });
-    plan = injectVocalForce(plan);
-    result = await composeMusic(apiKey, job.lyrics, plan);
-  }
-
-  const stillBad =
+  const isBad = () =>
     !result.sungAligned ||
     result.cues.length === 0 ||
     looksInstrumentalOnly(result.wav, result.sungAligned);
 
-  if (stillBad) {
-    const presence = vocalPresenceFromWav(result.wav);
+  // Up to 2 extra composes if spectral/sung gate fails (EL can return instrumental beds + stamps).
+  for (let retry = 1; retry <= 2 && isBad(); retry += 1) {
+    console.error("[elevenlabs] compose lacked sung vocals — retrying with vocal force", {
+      jobId: job.id,
+      retry,
+      sungAligned: result.sungAligned,
+      stampCount: result.stampCount,
+      cues: result.cues.length,
+      presence,
+    });
+    plan = injectVocalForce(plan);
+    result = await composeMusic(apiKey, job.lyrics, plan);
+    presence = vocalPresenceFromWav(result.wav);
+  }
+
+  if (isBad()) {
     throw new Error(
       `NO_VOCAL_PREVIEW: ElevenLabs returned instrumental or no sung word timestamps ` +
         `(sungAligned=${result.sungAligned}, stamps=${result.stampCount}, midFrac=${presence.midFrac.toFixed(3)}). ` +
