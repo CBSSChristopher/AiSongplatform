@@ -90,6 +90,7 @@ export function CheckoutPanel({ id }: { id: string }) {
   }
 
   const locked = !loadingJob && (Boolean(gateError) || !job?.listenCompletedAt);
+  const completeUrl = `/checkout/complete?job=${encodeURIComponent(id)}`;
 
   return (
     <div className="mx-auto max-w-xl rounded-3xl border border-[var(--line)] bg-[var(--card)] p-6">
@@ -130,6 +131,13 @@ export function CheckoutPanel({ id }: { id: string }) {
             <input type="checkbox" checked={print} onChange={(event) => togglePrint(event.target.checked)} />
           </label>
           <p className="mt-4 text-lg">Total ${total}.00</p>
+          <p className="mt-3 text-sm text-[var(--muted)]">
+            By continuing you agree to{" "}
+            <Link href="/terms" className="underline decoration-[var(--copper)] underline-offset-2">
+              SongSnuggle Terms &amp; Conditions
+            </Link>
+            .
+          </p>
           {!payload ? (
             <button
               type="button"
@@ -137,7 +145,7 @@ export function CheckoutPanel({ id }: { id: string }) {
               disabled={busy}
               className="mt-6 w-full rounded-full bg-[var(--copper)] px-4 py-3 text-white"
             >
-              {busy ? "Starting checkout…" : "Continue to checkout"}
+              {busy ? "Starting checkout…" : "Get My Song"}
             </button>
           ) : payload.mode === "demo" ? (
             <div className="mt-6">
@@ -150,7 +158,7 @@ export function CheckoutPanel({ id }: { id: string }) {
                 disabled={busy}
                 className="mt-4 w-full rounded-full bg-[var(--ink)] px-4 py-3 text-white"
               >
-                Unlock full song (demo)
+                Get My Song
               </button>
             </div>
           ) : (
@@ -160,9 +168,17 @@ export function CheckoutPanel({ id }: { id: string }) {
                 environment={payload.environment}
                 theme="light"
                 themeOptions={{ accentColor: "#b4532a", backgroundColor: "#fffaf2" }}
-                returnUrl={`${window.location.origin}/checkout/complete?job=${id}`}
-                onComplete={() => router.push(`/song/${id}`)}
+                returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}${completeUrl}`}
+                prefill={job?.email ? { email: job.email } : undefined}
+                hideTermsAndConditions
+                onComplete={() => router.push(completeUrl)}
               />
+              <p className="mt-3 text-center text-xs text-[var(--muted)]">
+                Payment processed for SongSnuggle.{" "}
+                <Link href="/terms" className="underline underline-offset-2">
+                  SongSnuggle Terms &amp; Conditions
+                </Link>
+              </p>
             </div>
           )}
         </>

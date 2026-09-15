@@ -54,6 +54,18 @@ export async function POST(request: Request) {
       plan_id: planId,
       mode: "payment",
       metadata,
+      // Card + crypto (+ Apple/Google Pay). No Bank Wire / ACH.
+      payment_method_configuration: {
+        enabled: ["card", "crypto", "apple_pay", "google_pay"],
+        disabled: [
+          "bank_wire",
+          "us_bank_account",
+          "us_bank_transfer",
+          "acss_debit",
+          "pay_by_bank",
+        ],
+        include_platform_defaults: false,
+      },
       ...(redirect.startsWith("https://")
         ? { redirect_url: checkoutRedirectUrl(redirect, job.id) }
         : {}),

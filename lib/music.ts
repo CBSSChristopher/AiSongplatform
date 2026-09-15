@@ -4,8 +4,11 @@ import { splitSyllables, sungLines } from "./lyric-parse";
 import { renderWithElevenLabs } from "./music-elevenlabs";
 import { renderWithXai } from "./music-xai";
 import type { SongJob } from "./types";
+import { PREVIEW_MAX_SECONDS } from "./preview-cap";
 
 export { splitSyllables, sungLines } from "./lyric-parse";
+
+export type RenderedAudio = { wav: Buffer; cues: LyricCue[]; mp3?: Buffer };
 
 function hashSeed(input: string) {
   let h = 2166136261;
@@ -199,7 +202,8 @@ function pickSungLines(
   seconds: number,
   recipientName: string,
 ) {
-  if (seconds > 60 || lines.length <= 8) return lines;
+  // Preview lengths (62–90s) still need chorus/name priority — do not burn time on filler verses.
+  if (seconds > 120 || lines.length <= 8) return lines;
   const name = recipientName.trim().toLowerCase();
   const chosen = new Map<number, (typeof lines)[number]>();
   let verseTaken = 0;
@@ -373,7 +377,7 @@ function isElevenLabsPaidPlanError(error: unknown): boolean {
   );
 }
 
-async function renderForJob(job: SongJob, seconds: number) {
+async function renderForJob(job: SongJob, seconds: number): Promise<RenderedAudio> {
   const provider = resolveMusicProvider();
   if (provider === "synth") {
     return renderSong(job, seconds);
@@ -403,15 +407,35 @@ async function renderForJob(job: SongJob, seconds: number) {
   return renderWithXaiAndBed(job, seconds);
 }
 
+/** Einstein PERFECT LOCK v2: heartfelt ~70s (floor 60); dense lyrics ≳180 words → 80–90s. */
+export function isHeartfeltOccasion(occasion: string): boolean {
+  return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
+}
+
+export function previewTargetSeconds(_job: SongJob): number {
+  // Hard lock to site “45-second preview” copy.
+  return PREVIEW_MAX_SECONDS;
+}
+
 export async function writePreviewAudio(job: SongJob) {
-  // ~50s: heartfelt phrasing room without raced 45s; still a true preview length.
-  const { wav, cues } = await renderForJob(job, 50);
-  await writeAudio(job.id, "preview", wav);
-  return cues;
+  const seconds = previewTargetSeconds(job);
+  const rendered = await renderForJob(job, seconds);
+  const { truncateWavToSeconds, truncateMp3ToSeconds } = await import("./preview-cap");
+  const wav = Buffer.from(truncateWavToSeconds(new Uint8Array(rendered.wav), seconds));
+  await writeAudio(job.id, "preview", wav, "wav");
+  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
+    const mp3 = Buffer.from(truncateMp3ToSeconds(new Uint8Array(rendered.mp3), seconds));
+    await writeAudio(job.id, "preview", mp3, "mp3");
+  }
+  // Drop cues that start at/after the hard cap so UI doesn't run past preview.
+  return (rendered.cues || []).filter((c) => c.start < seconds);
 }
 
 export async function writeFullAudio(job: SongJob) {
-  const { wav, cues } = await renderForJob(job, 135);
-  await writeAudio(job.id, "full", wav);
-  return cues;
+  const rendered = await renderForJob(job, 135);
+  await writeAudio(job.id, "full", rendered.wav, "wav");
+  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
+    await writeAudio(job.id, "full", rendered.mp3, "mp3");
+  }
+  return rendered.cues;
 }

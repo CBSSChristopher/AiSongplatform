@@ -1,6 +1,6 @@
 {
   "name": "hearloom",
-  "description": "SongSnuggle \u2014 personalized gift songs. Code name Hearloom.",
+  "description": "SongSnuggle — personalized gift songs. Code name Hearloom.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -19,7 +19,8 @@
     "test:elevenlabs-music": "tsx scripts/test-elevenlabs-music.ts",
     "test:whop-unlock": "tsx scripts/test-whop-unlock.ts",
     "test:email": "tsx scripts/test-email.ts",
-    "test:pcm-channels": "tsx scripts/test-pcm-channels.ts"
+    "test:pcm-channels": "tsx scripts/test-pcm-channels.ts",
+    "test:einstein-pack": "tsx scripts/test-einstein-pack-v2.ts"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",
