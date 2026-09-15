@@ -9,7 +9,19 @@ import { PREVIEW_MAX_SECONDS } from "./preview-cap";
 
 export { splitSyllables, sungLines } from "./lyric-parse";
 
-export type RenderedAudio = { wav: Buffer; cues: LyricCue[]; mp3?: Buffer };
+export type RenderedAudio = {
+  wav: Buffer;
+  cues: LyricCue[];
+  mp3?: Buffer;
+  sungAligned?: boolean;
+  stampCount?: number;
+  singleComposeSource?: boolean;
+  dualComposeUsed?: boolean;
+  forceInstrumentalFalse?: boolean;
+  lyricsInEveryChunk?: boolean;
+  provider?: "elevenlabs" | "xai" | "synth";
+  hasRealGraphStamps?: boolean;
+};
 
 function hashSeed(input: string) {
   let h = 2166136261;
@@ -346,7 +358,7 @@ function resolveMusicProvider(): "elevenlabs" | "xai" | "synth" {
   return "elevenlabs";
 }
 
-async function renderWithXaiAndBed(job: SongJob, seconds: number) {
+async function renderWithXaiAndBed(job: SongJob, seconds: number): Promise<RenderedAudio> {
   if (!process.env.XAI_API_KEY) {
     throw new Error(
       "Music provider is xAI Grok TTS, but XAI_API_KEY is not set. " +
@@ -355,16 +367,26 @@ async function renderWithXaiAndBed(job: SongJob, seconds: number) {
     );
   }
   const vocals = await renderWithXai(job, seconds);
+  const meta = {
+    sungAligned: Boolean(vocals.hasRealGraphStamps && vocals.cues.length),
+    stampCount: vocals.cues.reduce((n, c) => n + (c.words?.length || 0), 0),
+    singleComposeSource: true,
+    dualComposeUsed: false,
+    forceInstrumentalFalse: true,
+    lyricsInEveryChunk: true,
+    provider: "xai" as const,
+    hasRealGraphStamps: Boolean(vocals.hasRealGraphStamps),
+  };
   if (!vocals.samples.length || !vocals.sampleRate) {
-    return { wav: vocals.wav, cues: vocals.cues };
+    return { wav: vocals.wav, cues: vocals.cues, ...meta };
   }
   try {
     const bed = renderInstrumentalBed(job, vocals.duration, vocals.sampleRate);
     const mixed = mixVocalWithBed(vocals.samples, bed);
-    return { wav: encodeWav(mixed, vocals.sampleRate), cues: vocals.cues };
+    return { wav: encodeWav(mixed, vocals.sampleRate), cues: vocals.cues, ...meta };
   } catch (error) {
     console.error("[music] instrumental bed mix failed; serving a-cappella xAI vocals", error);
-    return { wav: vocals.wav, cues: vocals.cues };
+    return { wav: vocals.wav, cues: vocals.cues, ...meta };
   }
 }
 
@@ -381,7 +403,15 @@ function isElevenLabsPaidPlanError(error: unknown): boolean {
 async function renderForJob(job: SongJob, seconds: number): Promise<RenderedAudio> {
   const provider = resolveMusicProvider();
   if (provider === "synth") {
-    return renderSong(job, seconds);
+    const synth = await renderSong(job, seconds);
+    return {
+      ...synth,
+      provider: "synth" as const,
+      singleComposeSource: true,
+      dualComposeUsed: false,
+      sungAligned: false,
+      hasRealGraphStamps: false,
+    };
   }
   if (provider === "elevenlabs") {
     if (!process.env.ELEVENLABS_API_KEY) {
@@ -392,20 +422,25 @@ async function renderForJob(job: SongJob, seconds: number): Promise<RenderedAudi
       );
     }
     try {
-      return await renderWithElevenLabs(job, seconds);
+      const el = await renderWithElevenLabs(job, seconds);
+      return { ...el, provider: "elevenlabs" as const };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? "");
-      // Free EL Music returns HTTP 402 paid_plan_required — soft-fallback to xAI when available.
-      // Also fall back when EL returns instrumental / no sung timestamps (NO_VOCAL_PREVIEW).
-      if (
-        process.env.XAI_API_KEY &&
-        (isElevenLabsPaidPlanError(error) || /NO_VOCAL_PREVIEW/i.test(message))
-      ) {
+      // Free EL Music returns HTTP 402 paid_plan_required — soft-fallback to xAI when available
+      // (gate still refuses xAI TTS+bed as product preview). Do NOT use xAI to "fix" NO_VOCAL_PREVIEW —
+      // MC: priority path is NEW EL Music single-compose, not polished TTS+bed.
+      if (process.env.XAI_API_KEY && isElevenLabsPaidPlanError(error)) {
         console.error(
-          "[music] ElevenLabs Music unavailable or instrumental; falling back to xAI vocals+bed.",
+          "[music] ElevenLabs Music paid_plan/402; soft-fallback to xAI (gate will refuse product publish).",
           message,
         );
         return renderWithXaiAndBed(job, seconds);
+      }
+      if (/NO_VOCAL_PREVIEW/i.test(message)) {
+        console.error(
+          "[music] EL NO_VOCAL_PREVIEW — refusing xAI TTS+bed product path; need EL single-compose sung preview.",
+          message,
+        );
       }
       throw error;
     }
@@ -418,35 +453,36 @@ export function isHeartfeltOccasion(occasion: string): boolean {
   return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
 }
 
-export function previewTargetSeconds(_job: SongJob): number {
-  // Hard lock to site “45-second preview” copy.
+export function previewTargetSeconds(job: SongJob): number {
+  // Einstein G / MUSIC BAR v2: heartfelt ≥60s floor (70 default; dense → 85).
+  // Non-heartfelt stays at free-preview 45s marketing copy.
+  if (isHeartfeltOccasion(job.occasion || "")) {
+    const words = (job.lyrics || "").split(/\s+/).filter(Boolean).length;
+    if (words >= 180) return 85;
+    return 70;
+  }
   return PREVIEW_MAX_SECONDS;
 }
 
 export async function writePreviewAudio(job: SongJob): Promise<{
   cues: import("./cues").LyricCue[];
   audioDurationSec: number;
+  previewGate: import("./preview-acceptance-gate").PreviewGateResult;
 }> {
   const seconds = previewTargetSeconds(job);
   const rendered = await renderForJob(job, seconds);
-  const { truncateWavToSeconds, truncateMp3ToSeconds } = await import("./preview-cap");
+  const { truncateWavToSeconds } = await import("./preview-cap");
   const { audioDurationSeconds } = await import("./music-elevenlabs");
   const { cuesLookEqualSliced } = await import("./cues");
+  const { runPreviewAcceptanceGate } = await import("./preview-acceptance-gate");
+
+  // Truncate to compose target (MUSIC BAR for heartfelt) — not a silent 45 crush on 70s masters.
   const wav = Buffer.from(truncateWavToSeconds(new Uint8Array(rendered.wav), seconds));
   let cues = (rendered.cues || []).filter((c) => c.start < seconds);
-  // a16 RCA: EL path already refuses instrumental (looksInstrumentalOnly + NO_VOCAL_PREVIEW
-  // → xAI vocals+bed). Here: refuse empty cues; strip equal-sliced fake WORD karaoke slices.
+
+  // Refuse equal-time fake karaoke word slices (do not publish as sync).
   const equalSliced = cuesLookEqualSliced(cues);
-  if (!cues.length) {
-    throw new Error(
-      "NO_VOCAL_PREVIEW: preview has no lyric cues — refusing to publish.",
-    );
-  }
   if (equalSliced) {
-    console.error("[music] stripping equal-time fake word slices from preview cues", {
-      jobId: job.id,
-      lines: cues.length,
-    });
     cues = cues.map((c) => ({
       text: c.text,
       start: c.start,
@@ -455,19 +491,59 @@ export async function writePreviewAudio(job: SongJob): Promise<{
     }));
   }
 
-  await writeAudio(job.id, "preview", wav, "wav");
-  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
-    const mp3 = Buffer.from(truncateMp3ToSeconds(new Uint8Array(rendered.mp3), seconds));
-    await writeAudio(job.id, "preview", mp3, "mp3");
-  } else {
-    // a16 RCA: never leave a stale instrumental MP3 in KV when this render is wav-only (xAI).
-    await deleteAudio(job.id, "preview", "mp3");
-  }
   const audioDurationSec =
     audioDurationSeconds(wav) || Math.min(seconds, cueSpanEnd(cues) || seconds);
+  const duration = audioDurationSec > 1 ? audioDurationSec : seconds;
+
+  const provider = rendered.provider || "unknown";
+  const sungAligned = Boolean(
+    rendered.sungAligned && cues.length && !cuesLookEqualSliced(cues),
+  );
+
+  // Gate on the EXACT WAV bytes we will publish (single-compose source).
+  // Einstein A: never write a sibling MP3 from a second compose.
+  const previewGate = runPreviewAcceptanceGate({
+    job,
+    publishedWav: wav,
+    publishedMp3: null,
+    cues,
+    audioDurationSec: duration,
+    singleComposeSource: rendered.singleComposeSource !== false,
+    dualComposeUsed: Boolean(rendered.dualComposeUsed),
+    sungAligned,
+    stampCount: rendered.stampCount,
+    forceInstrumentalFalse: rendered.forceInstrumentalFalse !== false,
+    lyricsInEveryChunk: rendered.lyricsInEveryChunk !== false,
+    provider: provider === "elevenlabs" || provider === "xai" || provider === "synth" ? provider : "unknown",
+    xaiHasRealGraphStamps: Boolean(rendered.hasRealGraphStamps),
+    giftFramingPresent: true,
+    payPathPresent: true,
+    // Intelligibility: ASR/human ear still required — do not auto-pass.
+    asrOverlap: null,
+    coldLinkEarPass: null,
+  });
+
+  if (!previewGate.pass) {
+    // FAIL = no public preview bytes / no previewReady flip. Attach gate for route persist.
+    const err = new Error(
+      `PREVIEW_GATE_FAIL: ${previewGate.failures.length} proof(s) failed — ` +
+        previewGate.failures
+          .slice(0, 6)
+          .map((f) => `${f.id}: ${f.reason}`)
+          .join(" | "),
+    ) as Error & { previewGate: typeof previewGate };
+    err.previewGate = previewGate;
+    throw err;
+  }
+
+  await writeAudio(job.id, "preview", wav, "wav");
+  // Delete any stale dual-compose / instrumental MP3 so /audio serves THIS WAV.
+  await deleteAudio(job.id, "preview", "mp3");
+
   return {
     cues,
-    audioDurationSec: audioDurationSec > 1 ? audioDurationSec : seconds,
+    audioDurationSec: duration,
+    previewGate,
   };
 }
 

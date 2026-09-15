@@ -1,6 +1,6 @@
 {
   "name": "hearloom",
-  "description": "SongSnuggle — personalized gift songs. Code name Hearloom.",
+  "description": "SongSnuggle \u2014 personalized gift songs. Code name Hearloom.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -21,7 +21,8 @@
     "test:email": "tsx scripts/test-email.ts",
     "test:pcm-channels": "tsx scripts/test-pcm-channels.ts",
     "test:einstein-pack": "tsx scripts/test-einstein-pack-v2.ts",
-    "prove:lyric-sync": "node --experimental-strip-types scripts/prove-lyric-sync.mjs"
+    "prove:lyric-sync": "node --experimental-strip-types scripts/prove-lyric-sync.mjs",
+    "prove:preview-gate": "tsx --tsconfig tsconfig.json scripts/prove-preview-gate.ts"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",

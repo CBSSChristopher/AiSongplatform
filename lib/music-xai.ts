@@ -22,6 +22,7 @@ export type XaiVocalRender = {
   samples: Float32Array;
   sampleRate: number;
   duration: number;
+  hasRealGraphStamps: boolean;
 };
 
 type TimedChar = { char: string; start: number; end: number };
@@ -470,12 +471,14 @@ export async function renderWithXai(job: SongJob, targetSeconds: number): Promis
   }
   const result = await synthesize(apiKey, request);
   const fromGraph = cuesFromGraphTimestamps(job.lyrics, result.graph.chars, result.graph.times);
-  const cues = fromGraph ?? distributeCues(job.lyrics, result.duration || targetSeconds);
+  // Einstein F / Elon: never publish equal-time distributeCues as sync. Prefer real graph stamps only.
+  const cues = fromGraph ?? [];
   return {
     wav: result.wav,
     cues,
     samples: result.samples,
     sampleRate: result.sampleRate,
     duration: result.duration || targetSeconds,
+    hasRealGraphStamps: Boolean(fromGraph && fromGraph.length),
   };
 }

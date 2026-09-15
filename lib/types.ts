@@ -33,6 +33,8 @@ export type SongJob = {
   lyricCues: LyricCue[];
   includeLyricPrint: boolean;
   previewReady: boolean;
+  /** Elon/Atlas/Einstein acceptance gate — set before/with previewReady. */
+  previewGate: import("./preview-acceptance-gate").PreviewGateResult | null;
   listenCompletedAt: string | null;
   fullReady: boolean;
   paidAt: string | null;

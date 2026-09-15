@@ -977,7 +977,14 @@ async function composeMusic(
   cues: LyricCue[];
   sungAligned: boolean;
   stampCount: number;
+  /** Einstein A: always true — one detailed compose only (dual /v1/music MP3 banned). */
+  singleComposeSource: true;
+  dualComposeUsed: false;
+  forceInstrumentalFalse: true;
+  lyricsInEveryChunk: boolean;
 }> {
+  // Einstein A — MUST: single POST /v1/music/detailed with with_timestamps.
+  // Ban parallel /v1/music?mp3 (Joseph heard different bytes than gated WAV/cues).
   const body = {
     model_id: MODEL_ID,
     composition_plan: compositionPlan,
@@ -986,23 +993,15 @@ async function composeMusic(
   };
 
   let wav: Buffer | null = null;
+  // No sibling MP3 compose. Publish WAV from this detailed call; /audio falls back to WAV.
+  // (Encoding MP3 from these same PCM bytes can be a later same-source step — never a second compose.)
   let mp3: Buffer | undefined;
   let stamps: WordStamp[] = [];
 
-  // Parallel MP3 for iOS <audio> — Workers cannot run ffmpeg/lamejs in time.
-  const mp3Promise = fetch(`${API_BASE}?output_format=mp3_44100_128`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "audio/*, application/json",
-    },
-    body: JSON.stringify({
-      model_id: MODEL_ID,
-      composition_plan: compositionPlan,
-      force_instrumental: false,
-    }),
-  }).catch(() => null);
+  const lyricsInEveryChunk = compositionPlan.chunks.every((c) => {
+    const t = (c.text || "").replace(/\[[^\]]*\]/g, " ").replace(/\{instrumental[^}]*\}/gi, " ").trim();
+    return t.split(/\s+/).filter(Boolean).length >= 3;
+  });
 
   const detailed = await fetch(`${API_BASE}/detailed?output_format=pcm_44100`, {
     method: "POST",
@@ -1087,17 +1086,20 @@ async function composeMusic(
   const cues = fromStamps ?? [];
   const sungAligned = Boolean(fromStamps && fromStamps.length);
 
-  try {
-    const mp3Res = await mp3Promise;
-    if (mp3Res?.ok) {
-      const buf = Buffer.from(await mp3Res.arrayBuffer());
-      if (buf.byteLength > 512) mp3 = buf;
-    }
-  } catch {
-    // WAV master still saved; playback can fall back until backfill.
-  }
+  // Dual-compose MP3 deliberately omitted — published bytes = this WAV only.
+  mp3 = undefined;
 
-  return { wav, mp3, cues, sungAligned, stampCount: usableStamps.length };
+  return {
+    wav,
+    mp3,
+    cues,
+    sungAligned,
+    stampCount: usableStamps.length,
+    singleComposeSource: true,
+    dualComposeUsed: false,
+    forceInstrumentalFalse: true,
+    lyricsInEveryChunk,
+  };
 }
 
 const VOCAL_FORCE_POSITIVES = [
@@ -1299,6 +1301,10 @@ export type ElevenLabsRender = {
   cues: LyricCue[];
   sungAligned: boolean;
   stampCount: number;
+  singleComposeSource: true;
+  dualComposeUsed: false;
+  forceInstrumentalFalse: true;
+  lyricsInEveryChunk: boolean;
 };
 
 export async function renderWithElevenLabs(job: SongJob, targetSeconds: number): Promise<ElevenLabsRender> {
