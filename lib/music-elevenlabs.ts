@@ -164,8 +164,8 @@ export function buildCompositionPlan(job: SongJob, targetSeconds: number): { chu
     sections = [{ section: "verse", label: "Verse 1", lines: ["A song made just for you."] }];
   }
 
-  // Preview: keep verse + chorus (+ bridge if short) so total stays ~45s.
-  if (targetSeconds <= 50 && sections.length > 3) {
+  // Preview: keep verse + chorus (+ bridge if short) so total stays ~preview length.
+  if (targetSeconds <= 60 && sections.length > 3) {
     const verse = sections.find((s) => s.section === "verse");
     const chorus = sections.find((s) => s.section === "chorus");
     const bridge = sections.find((s) => s.section === "bridge");
@@ -510,10 +510,21 @@ function parseWordStamps(payload: unknown): WordStamp[] {
       let start = Number(startRaw);
       let end = Number(endRaw);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-      // Per-value ms fix: EL sometimes mixes ms (219, 400) with seconds (0.959).
-      // Threshold >100 catches 219–799ms that >1000 missed.
-      if (start > 100) start /= 1000;
-      if (end > 100) end /= 1000;
+      // EL mixes ms (219,400) with seconds (0.959). Do NOT treat 100–200 as always-ms —
+      // songs >100s have legitimate second stamps there.
+      // Heuristics: >1000 ⇒ ms; both >100 with absurd word span (>20s) ⇒ ms pair;
+      // start>100 with small end (<30) ⇒ start was ms in a mixed row.
+      if (start > 1000 || end > 1000) {
+        start /= 1000;
+        end /= 1000;
+      } else if (start > 100 && end > 100 && end - start > 20) {
+        start /= 1000;
+        end /= 1000;
+      } else if (start > 100 && end < 30) {
+        start /= 1000;
+      } else if (end > 100 && start < 30 && end > start) {
+        end /= 1000;
+      }
       if (end < start) continue;
       stamps.push({ text, start, end });
     }
