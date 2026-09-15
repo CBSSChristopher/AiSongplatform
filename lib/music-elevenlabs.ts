@@ -20,55 +20,136 @@ function isIntimateOccasion(occasion: string): boolean {
   return ["anniversary", "wedding", "in-memory", "bedtime"].includes(occasion);
 }
 
+/** Heartfelt gift occasions — medium tempo, warm lead, not a race. */
+function isHeartfeltOccasion(occasion: string): boolean {
+  return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
+}
+
+/**
+ * Genre color only — tempo/energy comes from occasionStyles.
+ * Avoid blanket "upbeat/energetic/lively" here (caused raced birthday previews).
+ */
 function genreStyles(genre: string, occasion = ""): string[] {
   switch (genre) {
     case "pop":
-      return ["pop", "upbeat tempo", "energetic", "catchy hook", "polished production", "lively", "tight drums"];
+      return ["pop", "catchy hook", "polished production", "full band", "tight drums", "radio-ready"];
     case "country":
-      return ["country", "upbeat tempo", "energetic", "driving acoustic guitar", "lively two-step", "polished gift-song", "bright twang"];
+      return ["country", "warm acoustic guitar", "polished gift-song", "bright twang", "full band"];
     case "rnb":
-      return ["r&b", "upbeat tempo", "energetic groove", "clear professional vocals", "tight production", "lively", "polished"];
+      return ["r&b", "smooth groove", "clear professional vocals", "tight production", "polished", "full band"];
     case "rock":
-      return ["soft rock", "electric guitar", "anthemic", "driving beat", "upbeat tempo", "energetic"];
+      return ["soft rock", "electric guitar", "anthemic", "full band", "driving but measured"];
     case "worship":
-      return ["worship", "reverent", "piano and pad", "hopeful"];
+      return ["worship", "reverent", "piano and pad", "hopeful", "clear lead vocal"];
     case "lullaby":
-      // Intentionally soft/slow — do not energize lullabies.
-      return ["lullaby", "soft and gentle", "slow tempo", "quiet intimacy"];
+      return ["lullaby", "soft and gentle", "quiet intimacy", "sparse arrangement"];
     case "jazz":
-      // Default gift jazz is livelier; only lean intimate when occasion is explicitly intimate.
       if (isIntimateOccasion(occasion)) {
         return ["jazz", "warm piano", "brushed drums", "intimate nightclub", "clear vocals"];
       }
-      return ["jazz", "upbeat swing", "lively", "swing rhythm", "clear vocals", "bright horns", "gift-song jazz", "energetic"];
+      return ["jazz", "swing rhythm", "clear vocals", "warm horns", "gift-song jazz", "full band"];
     default:
-      return ["acoustic folk", "warm guitar", "upbeat tempo", "energetic", "organic", "clear vocals"];
+      return ["acoustic folk", "warm guitar", "organic", "clear vocals", "full arrangement"];
   }
 }
 
 function voiceStyles(voice: string): string[] {
-  if (voice === "male") return ["male vocals", "clear male singer"];
-  if (voice === "female") return ["female vocals", "clear female singer"];
-  return ["natural vocals", "expressive singer"];
+  if (voice === "male") return ["male vocals", "clear male singer", "expressive male lead"];
+  if (voice === "female") return ["female vocals", "clear female singer", "expressive female lead"];
+  return ["natural vocals", "expressive singer", "clear lead vocal"];
+}
+
+/** Occasion drives tempo — birthday dad→daughter must not race. */
+function occasionStyles(occasion: string, genre: string): string[] {
+  if (genre === "lullaby" || occasion === "bedtime") {
+    return ["slow tempo", "soft and gentle", "quiet intimacy", "tender"];
+  }
+  if (isIntimateOccasion(occasion)) {
+    return [
+      "medium-slow tempo",
+      "warm",
+      "intimate",
+      "clear lead vocal",
+      "emotional",
+      "polished gift-song",
+      "natural phrasing",
+      "not rushed",
+    ];
+  }
+  if (isHeartfeltOccasion(occasion)) {
+    return [
+      "medium tempo",
+      "warm",
+      "heartfelt",
+      "clear lead vocal",
+      "polished gift-song",
+      "full band",
+      "natural phrasing",
+      "not rushed",
+      "singable melody",
+      "measured groove",
+    ];
+  }
+  // just-because / celebratory — feel-good without chipmunk/race
+  return [
+    "medium-up tempo",
+    "feel-good",
+    "polished gift-song",
+    "clear lead vocal",
+    "full band",
+    "great production quality",
+    "natural phrasing",
+  ];
+}
+
+function negativeStylesFor(job: SongJob): string[] {
+  const base = [
+    "harsh distortion",
+    "screaming",
+    "explicit",
+    "slurred",
+    "robotic",
+    "mumbled",
+    "chipmunk",
+    "rushed",
+    "double-time",
+    "racing tempo",
+    "frantic",
+    "too fast",
+    "sped-up vocals",
+    "hurried phrasing",
+    "muddy mix",
+  ];
+  if (job.genre === "lullaby" || job.occasion === "bedtime") {
+    return [...base, "loud drums", "aggressive", "club drop"];
+  }
+  if (isIntimateOccasion(job.occasion) || isHeartfeltOccasion(job.occasion)) {
+    // Allow warm ballad energy; ban mush AND race.
+    return [...base, "dirge", "lethargic", "sleepy", "draggy tempo", "race tempo", "two-step race"];
+  }
+  return [...base, "sluggish", "lethargic", "sleepy", "dirge", "draggy tempo"];
 }
 
 function positiveStyles(job: SongJob, section: string): string[] {
   const base = [
     ...genreStyles(job.genre, job.occasion),
     ...voiceStyles(job.voice),
-    "upbeat tempo",
-    "energetic",
+    ...occasionStyles(job.occasion, job.genre),
     "tight production",
-    "polished gift-song",
     "clear professional vocals",
-    "lively",
     "great production quality",
     "clear lyrics",
     "heartfelt gift song",
   ];
-  if (section === "chorus") base.push("memorable chorus", "slightly bigger arrangement", "punchy chorus");
-  if (section === "bridge") base.push("lifted bridge", "keep energy moving");
-  if (section === "verse") base.push("conversational verse", "forward momentum");
+  if (section === "chorus") {
+    base.push("memorable chorus", "slightly bigger arrangement", "warm lift");
+  }
+  if (section === "bridge") {
+    base.push("lifted bridge", "keep phrasing natural");
+  }
+  if (section === "verse") {
+    base.push("conversational verse", "storytelling verse");
+  }
   return [...new Set(base)].slice(0, 50);
 }
 
@@ -110,7 +191,7 @@ export function buildCompositionPlan(job: SongJob, targetSeconds: number): { chu
       text,
       duration_ms,
       positive_styles: positiveStyles(job, section.section),
-      negative_styles: ["harsh distortion", "screaming", "explicit", "sluggish", "lethargic", "slurred", "robotic", "mumbled", "sleepy", "dirge", "slow intimate ballad", "draggy tempo"],
+      negative_styles: negativeStylesFor(job),
       context_adherence: index === 0 ? "high" : "medium",
     };
   });
@@ -182,7 +263,7 @@ export type PcmChannelHints = {
   contentType?: string;
 };
 
-function nearDuration(actualSec: number, expectedSec: number, tol = 0.2): boolean {
+function nearDuration(actualSec: number, expectedSec: number, tol = 0.09): boolean {
   if (!(expectedSec > 0) || !(actualSec > 0)) return false;
   return Math.abs(actualSec - expectedSec) / expectedSec <= tol;
 }
@@ -249,9 +330,10 @@ function guessChannelsFromDecorrelation(pcm: Buffer): 1 | 2 | null {
   const lag1 = lagDen > 0 ? covLag / lagDen : 0;
   const delta = Math.abs(lr - lag1);
 
-  // Mono-as-stereo: stream lag-1 ≈ L/R corr and both are meaningfully correlated.
-  if (lag1 > 0.25 && delta < 0.01) return 1;
-  // Clear stereo separation (independent or clearly divergent channels).
+  // Proven fixture rule (rca-6704, too-fast, preview-el-*):
+  // Highly correlated L/R with high lag-1 → mono stream paired as stereo.
+  if (lr > 0.8 && lag1 > 0.8) return 1;
+  if (lag1 > 0.25 && delta < 0.02) return 1;
   if (delta >= 0.015 || (Math.abs(lr) < 0.2 && lag1 < 0.2)) return 2;
   return null;
 }
@@ -267,10 +349,9 @@ function channelHintFromFormat(hints?: PcmChannelHints): 1 | 2 | null {
 }
 
 /**
- * Infer PCM16 channel count (OFFLINE / unit tests only).
- * Production pcm_44100 path always encodes stereo — do not call from toWavBuffer.
- * Do not trust expectedDuration alone: API duration / format hints win, then
- * byte-length 2× heuristics, then optional L/R decorrelation.
+ * Infer PCM16 channel count for pcm_44100 payloads.
+ * API duration / format hints win, then byte-length 2× heuristics, then L/R decorrelation.
+ * Wired from toWavBuffer so mono EL payloads are not force-labeled stereo (2× too-fast).
  */
 export function detectPcmChannels(
   pcm: Buffer,
@@ -286,7 +367,7 @@ export function detectPcmChannels(
 
   const apiDur = hints?.apiDurationSec && hints.apiDurationSec > 0 ? hints.apiDurationSec : undefined;
   if (apiDur && monoSec > 0) {
-    // Unambiguous API matches.
+    // Unambiguous API matches (tight nearDuration tol — 0.09).
     if (nearDuration(monoSec, apiDur) && !nearDuration(stereoSec, apiDur)) return 1;
     // Ambiguous: stereoSec≈apiDur and monoSec≈2×apiDur — same trap as plan duration; use decorrelation.
     if (nearDuration(stereoSec, apiDur) && nearDuration(monoSec, 2 * apiDur)) {
@@ -296,10 +377,14 @@ export function detectPcmChannels(
       // Fall through to shared ambiguous handling below (E will be apiDur).
     } else if (nearDuration(stereoSec, apiDur) && !nearDuration(monoSec, apiDur)) {
       return 2;
-    } else if (Math.abs(monoSec - apiDur) < Math.abs(stereoSec - apiDur)) {
-      return 1;
-    } else if (Math.abs(stereoSec - apiDur) < Math.abs(monoSec - apiDur)) {
-      return 2;
+    } else {
+      // Weak/wrong apiDur (e.g. stamp span 90 vs true stereo 40 / monoSec 80):
+      // do NOT closer-wins to mono — that mislabeled locked pop-female. Prefer deco.
+      const deco = guessChannelsFromDecorrelation(pcm);
+      if (deco === 1) return 1;
+      if (deco === 2) return 2;
+      if (Math.abs(monoSec - apiDur) < Math.abs(stereoSec - apiDur)) return 1;
+      if (Math.abs(stereoSec - apiDur) < Math.abs(monoSec - apiDur)) return 2;
     }
   }
 
@@ -425,11 +510,10 @@ function parseWordStamps(payload: unknown): WordStamp[] {
       let start = Number(startRaw);
       let end = Number(endRaw);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-      // Heuristic: values > 1000 are milliseconds.
-      if (start > 1000 || end > 1000) {
-        start /= 1000;
-        end /= 1000;
-      }
+      // Per-value ms fix: EL sometimes mixes ms (219, 400) with seconds (0.959).
+      // Threshold >100 catches 219–799ms that >1000 missed.
+      if (start > 100) start /= 1000;
+      if (end > 100) end /= 1000;
       if (end < start) continue;
       stamps.push({ text, start, end });
     }
@@ -531,17 +615,58 @@ async function parseMultipartMusic(response: Response): Promise<{ audio: Buffer;
   return { audio, meta };
 }
 
-function toWavBuffer(audio: Buffer, _expectedDurationSec?: number, _hints?: PcmChannelHints): Buffer {
+/** Encode EL pcm_44100 (or pass-through WAV). Exported for fixture tests. */
+export function toWavBuffer(audio: Buffer, expectedDurationSec?: number, hints?: PcmChannelHints): Buffer {
   if (isWav(audio)) return audio;
   if (isMp3(audio)) {
     throw new Error(
       "ElevenLabs returned MP3; pcm_44100 was unavailable. Convert to WAV is not supported on Workers — retry or check output_format.",
     );
   }
-  // Raw EL Music output_format=pcm_44100 is ALWAYS interleaved stereo PCM16 @ 44.1kHz.
-  // Never run detectPcmChannels in production: labeling stereo as mono → half-speed (Joseph after PR15).
-  // detectPcmChannels remains exported for offline unit tests only.
-  return encodePcm16Wav(audio, PCM_RATE, 2);
+  // Detect mono vs stereo from bytes + hints. Force-stereo on mono PCM → 2× too-fast (PR16).
+  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec, hints);
+  return encodePcm16Wav(audio, PCM_RATE, channels);
+}
+
+
+function stampSpanSec(stamps: WordStamp[]): number {
+  if (!stamps.length) return 0;
+  let maxEnd = 0;
+  for (const s of stamps) {
+    if (s.end > maxEnd) maxEnd = s.end;
+  }
+  return maxEnd;
+}
+
+function scaleWordStamps(stamps: WordStamp[], factor: number): WordStamp[] {
+  if (!(factor > 0) || Math.abs(factor - 1) < 0.02) return stamps;
+  return stamps.map((s) => ({
+    text: s.text,
+    start: s.start * factor,
+    end: s.end * factor,
+  }));
+}
+
+/** True when stamps look unusable (crushed last words, zero-width, inverted). */
+function stampsLookBroken(stamps: WordStamp[], audioDurationSec: number): boolean {
+  if (!stamps.length) return true;
+  const span = stampSpanSec(stamps);
+  if (!(span > 0.5)) return true;
+  let zeroWidth = 0;
+  let tiny = 0;
+  for (const s of stamps) {
+    const dur = s.end - s.start;
+    if (dur <= 0) zeroWidth += 1;
+    if (dur > 0 && dur < 0.02) tiny += 1;
+  }
+  if (zeroWidth > stamps.length * 0.1) return true;
+  if (tiny > stamps.length * 0.35) return true;
+  // Crushed into final 0.5s of a much longer song.
+  if (audioDurationSec > 8) {
+    const late = stamps.filter((s) => s.start >= audioDurationSec - 0.5);
+    if (late.length >= 8) return true;
+  }
+  return false;
 }
 
 async function composeMusic(
@@ -610,7 +735,19 @@ async function composeMusic(
   }
 
   const duration = audioDurationSeconds(wav) || compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
-  const fromStamps = cuesFromWordStamps(lyrics, stamps);
+  let usableStamps = stamps;
+  const span = stampSpanSec(usableStamps);
+  // When mono PCM was previously force-stereo, stamps often span ~½ the true WAV duration.
+  if (span > 1 && duration > 1 && nearDuration(duration, 2 * span, 0.15)) {
+    usableStamps = scaleWordStamps(usableStamps, duration / span);
+  } else if (span > 1 && duration > 1 && duration / span > 1.35 && duration / span < 2.4) {
+    // Softer 2×-ish mismatch (e.g. 90s wav vs ~45s stamps).
+    usableStamps = scaleWordStamps(usableStamps, duration / span);
+  }
+  const fromStamps =
+    usableStamps.length && !stampsLookBroken(usableStamps, duration)
+      ? cuesFromWordStamps(lyrics, usableStamps)
+      : null;
   const cues = fromStamps ?? distributeCues(lyrics, duration);
   return { wav, cues };
 }
