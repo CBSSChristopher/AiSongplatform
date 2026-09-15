@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { GiftCardPrint } from "@/components/GiftCardPrint";
 import { GiftDeliveryTemplate } from "@/components/GiftDeliveryTemplate";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import {
@@ -86,6 +87,7 @@ export default async function SongPage({
             audioSrc={`/api/jobs/${id}/audio?full=1&format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
             cues={cuesWithSungWordsOnly(job.lyricCues || [])}
             encodedDurationSec={encodedSec}
+            qrPrintSlot={<GiftCardPrint job={pub} />}
           />
         ) : (
           <>

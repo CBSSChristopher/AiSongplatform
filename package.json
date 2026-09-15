@@ -1,6 +1,6 @@
 {
   "name": "hearloom",
-  "description": "SongSnuggle \u2014 personalized gift songs. Code name Hearloom.",
+  "description": "SongSnuggle — personalized gift songs. Code name Hearloom.",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -32,6 +32,7 @@
     "@whop/sdk": "^1.1.2",
     "next": "16.3.4",
     "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.5.4"
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
