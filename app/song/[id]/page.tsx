@@ -1,33 +1,13 @@
 import { notFound } from "next/navigation";
-import { LyricAudio } from "@/components/LyricAudio";
-import { SongDelivery } from "@/components/SongDelivery";
+import { GiftDeliveryTemplate } from "@/components/GiftDeliveryTemplate";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
-import { cueSpanEnd, cuesNeedRescale, rescaleCuesToDuration } from "@/lib/cues";
+import {
+  cueSpanEnd,
+  cuesNeedRescale,
+  rescaleCuesToDuration,
+} from "@/lib/cues";
 import { readAudio, getJob, publicJob, updateJob } from "@/lib/store";
-
-async function resolveFullDurationSec(jobId: string): Promise<number | null> {
-  try {
-    const mp3 = await readAudio(jobId, "full", "mp3");
-    if (mp3 && mp3.byteLength > 512) {
-      const { readXingInfo } = await import("@/lib/mp3");
-      const info = readXingInfo(mp3);
-      if (info?.durationSec && info.durationSec > 1) return info.durationSec;
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const wav = await readAudio(jobId, "full", "wav");
-    if (wav && wav.byteLength > 44) {
-      const { audioDurationSeconds } = await import("@/lib/music-elevenlabs");
-      const dur = audioDurationSeconds(wav);
-      if (dur > 1) return dur;
-    }
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
+import { resolveEncodedFullDurationSec } from "@/lib/true-duration";
 
 export default async function SongPage({
   params,
@@ -38,64 +18,83 @@ export default async function SongPage({
   let job = await getJob(id);
   if (!job) notFound();
   const unlocked = Boolean(job.paidAt && job.fullReady);
-  const from = job.senderName.trim();
-  const displayTitle =
-    (job.songTitle || "").trim() ||
-    (job.recipientName ? `For ${job.recipientName}` : "Your song");
+
+  let encodedSec = job.audioDurationSec ?? null;
 
   if (unlocked && (job.lyricCues || []).length) {
-    const dur = await resolveFullDurationSec(id);
-    if (dur && cuesNeedRescale(job.lyricCues, dur, 2)) {
-      const nextCues = rescaleCuesToDuration(job.lyricCues, dur);
-      const healed = await updateJob(id, { lyricCues: nextCues });
-      if (healed) job = healed;
-      console.info("[song] healed lyric cues to full duration", {
-        jobId: id,
-        audioSec: dur,
-        beforeEnd: cueSpanEnd(job.lyricCues),
-        afterEnd: cueSpanEnd(nextCues),
-      });
+    const mp3 = await readAudio(id, "full", "mp3");
+    const wav = await readAudio(id, "full", "wav");
+    const dur = await resolveEncodedFullDurationSec({
+      wav,
+      mp3,
+      storedSec: job.audioDurationSec,
+      cues: job.lyricCues,
+    });
+    if (dur > 1) {
+      encodedSec = dur;
+      const patch: {
+        audioDurationSec?: number;
+        lyricCues?: typeof job.lyricCues;
+      } = {};
+      if (!(job.audioDurationSec && Math.abs(job.audioDurationSec - dur) < 0.5)) {
+        patch.audioDurationSec = dur;
+      }
+      if (cuesNeedRescale(job.lyricCues, dur, 2)) {
+        const nextCues = rescaleCuesToDuration(job.lyricCues, dur);
+        patch.lyricCues = nextCues;
+        console.info("[song] fitted lyric cues to encoded duration", {
+          jobId: id,
+          audioSec: dur,
+          beforeEnd: cueSpanEnd(job.lyricCues),
+          afterEnd: cueSpanEnd(nextCues),
+        });
+      }
+      // Refuse to persist a cue span that still mismatches after fit.
+      if (patch.lyricCues && cuesNeedRescale(patch.lyricCues, dur, 2)) {
+        console.error("[song] cue span still mismatches encoded audio — skip persist", {
+          jobId: id,
+          audioSec: dur,
+          cueEnd: cueSpanEnd(patch.lyricCues),
+        });
+        delete patch.lyricCues;
+      }
+      if (Object.keys(patch).length) {
+        const healed = await updateJob(id, patch);
+        if (healed) job = healed;
+      }
     }
   }
+
+  const pub = publicJob(job);
 
   return (
     <div>
       <SiteHeader />
       <main className="mx-auto max-w-2xl px-5 py-10">
-        <p className="text-sm uppercase tracking-[0.2em] text-[var(--copper)]">
-          {unlocked ? "Your gift is ready" : "Private listening page"}
-        </p>
-        <h1 className="serif mt-3 text-4xl">{displayTitle}</h1>
-        <p className="mt-2 text-[var(--muted)]">
-          Made for {job.recipientName}
-          {from ? <> · From {from}</> : null}
-        </p>
         {unlocked ? (
-          <>
-            <p className="mt-4 text-[var(--muted)]">
-              A keepsake in its own space — play below, follow the words, download the MP3
-              for phone &amp; text
-              {job.email ? (
-                <>
-                  , and we also email this private page to{" "}
-                  <span className="text-[var(--ink)]">{job.email}</span>
-                </>
-              ) : null}
-              .
-            </p>
-            <LyricAudio
-              gift
-              title={displayTitle}
-              src={`/api/jobs/${id}/audio?full=1&format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
-              cues={job.lyricCues || []}
-              fallbackLyrics={job.lyrics}
-            />
-            <SongDelivery job={publicJob(job)} />
-          </>
+          <GiftDeliveryTemplate
+            job={pub}
+            audioSrc={`/api/jobs/${id}/audio?full=1&format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
+            cues={job.lyricCues || []}
+            encodedDurationSec={encodedSec}
+          />
         ) : (
-          <p className="mt-6 text-[var(--muted)]">
-            This song is not unlocked yet. Finish checkout to release the full recording.
-          </p>
+          <>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--copper)]">
+              Private listening page
+            </p>
+            <h1 className="serif mt-3 text-4xl">
+              {(job.songTitle || "").trim() ||
+                (job.recipientName ? `For ${job.recipientName}` : "Your song")}
+            </h1>
+            <p className="mt-2 text-[var(--muted)]">
+              Made for {job.recipientName}
+              {job.senderName.trim() ? <> · From {job.senderName.trim()}</> : null}
+            </p>
+            <p className="mt-6 text-[var(--muted)]">
+              This song is not unlocked yet. Finish checkout to release the full recording.
+            </p>
+          </>
         )}
       </main>
       <SiteFooter />

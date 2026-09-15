@@ -457,16 +457,27 @@ export async function writeFullAudio(job: SongJob) {
   // Fit cues to the master that was actually stored (not the EL stamp timeline).
   const { audioDurationSeconds } = await import("./music-elevenlabs");
   let cues = rendered.cues || [];
+  let audioDurationSec = 0;
   try {
     const dur =
       audioDurationSeconds(rendered.wav) ||
       cueSpanEnd(cues) ||
       0;
+    audioDurationSec = dur > 1 ? dur : 0;
     if (dur > 1 && cues.length) {
       cues = rescaleCuesToDuration(cues, dur);
+      // Refuse to ship cue span that still mismatches encoded audio.
+      if (Math.abs(cueSpanEnd(cues) - dur) > 2) {
+        console.error("[music] cue span mismatch after fit — refusing cues", {
+          jobId: job.id,
+          dur,
+          cueEnd: cueSpanEnd(cues),
+        });
+        cues = [];
+      }
     }
   } catch (error) {
     console.error("[music] cue rescale after full write failed", error);
   }
-  return cues;
+  return { cues, audioDurationSec };
 }

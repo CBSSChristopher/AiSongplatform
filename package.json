@@ -20,7 +20,8 @@
     "test:whop-unlock": "tsx scripts/test-whop-unlock.ts",
     "test:email": "tsx scripts/test-email.ts",
     "test:pcm-channels": "tsx scripts/test-pcm-channels.ts",
-    "test:einstein-pack": "tsx scripts/test-einstein-pack-v2.ts"
+    "test:einstein-pack": "tsx scripts/test-einstein-pack-v2.ts",
+    "prove:lyric-sync": "node --experimental-strip-types scripts/prove-lyric-sync.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",

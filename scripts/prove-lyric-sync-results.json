@@ -1,0 +1,59 @@
+{
+  "checkedAt": "2026-09-15T05:50:04.014Z",
+  "results": [
+    {
+      "id": "6a0a92af-ae93-45d8-a9f3-56053a123acf",
+      "voice": "female",
+      "title": "For Ma-lee-ya",
+      "xingDur": 83.56571428571428,
+      "cueEnd": 83.56571428571428,
+      "trueDur": 83.56571428571428,
+      "lastCueEnd": 83.56571428571428,
+      "samples": [
+        {
+          "t": 8.42,
+          "idx": 0,
+          "line": "Nine ball on the corner, you called it with a gr"
+        },
+        {
+          "t": 33.43,
+          "idx": 5,
+          "line": "Your daddy's standing back here proud of everyth"
+        },
+        {
+          "t": 58.5,
+          "idx": 13,
+          "line": "I just want the record clear, so I'm saying it o"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "63a855ab-e33a-4273-a23d-552839a16030",
+      "voice": "male",
+      "title": "Happy Birthday, Maliya",
+      "xingDur": 85.02857142857142,
+      "cueEnd": 85.02857099999999,
+      "trueDur": 85.02857142857142,
+      "lastCueEnd": 85.02857142857142,
+      "samples": [
+        {
+          "t": 8.5,
+          "idx": 2,
+          "line": "Half the room was betting on the guy with the fa"
+        },
+        {
+          "t": 34.01,
+          "idx": 7,
+          "line": "You go on out and ride it, girl, and I'll be hol"
+        },
+        {
+          "t": 59.52,
+          "idx": 13,
+          "line": "I just want the record clear, so I'm saying it o"
+        }
+      ],
+      "ok": true
+    }
+  ]
+}

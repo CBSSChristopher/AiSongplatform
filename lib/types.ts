@@ -36,6 +36,8 @@ export type SongJob = {
   listenCompletedAt: string | null;
   fullReady: boolean;
   paidAt: string | null;
+  /** Encoded full-master duration (WAV PCM seconds). Authoritative for lyric fit. */
+  audioDurationSec: number | null;
   whopPaymentId: string | null;
   checkoutSessionId: string | null;
 };

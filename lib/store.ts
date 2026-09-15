@@ -34,6 +34,7 @@ export function publicJob(job: SongJob): PublicSongJob {
     listenCompletedAt: job.listenCompletedAt ?? null,
     fullReady: job.fullReady,
     paidAt: job.paidAt,
+    audioDurationSec: job.audioDurationSec ?? null,
   };
 }
 
@@ -82,6 +83,7 @@ export async function createJob(partial: Partial<SongJob>): Promise<SongJob> {
     listenCompletedAt: null,
     fullReady: false,
     paidAt: null,
+    audioDurationSec: null,
     whopPaymentId: null,
     checkoutSessionId: null,
     ...partial,

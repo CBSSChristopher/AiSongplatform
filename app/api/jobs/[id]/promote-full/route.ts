@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { LyricCue } from "@/lib/cues";
-import { cueSpanEnd, rescaleCuesToDuration } from "@/lib/cues";
+import { cueSpanEnd, rescaleCuesToDuration, cuesNeedRescale } from "@/lib/cues";
 import { getJob, publicJob, readAudio, updateJob } from "@/lib/store";
+import { resolveEncodedFullDurationSec } from "@/lib/true-duration";
 
 /**
  * Promote an existing full master already in KV to delivered (earcheck / ops).
@@ -30,15 +31,12 @@ export async function POST(
     );
   }
 
-  let durationSec = 0;
-  if (mp3 && mp3.byteLength > 512) {
-    const { readXingInfo } = await import("@/lib/mp3");
-    durationSec = readXingInfo(mp3)?.durationSec || 0;
-  }
-  if (!(durationSec > 1) && wav) {
-    const { audioDurationSeconds } = await import("@/lib/music-elevenlabs");
-    durationSec = audioDurationSeconds(wav) || 0;
-  }
+  const durationSec = await resolveEncodedFullDurationSec({
+    wav,
+    mp3,
+    storedSec: job.audioDurationSec,
+    cues: job.lyricCues,
+  });
 
   const body = (await request.json().catch(() => ({}))) as {
     lyricCues?: LyricCue[];
@@ -50,6 +48,16 @@ export async function POST(
     : job.lyricCues || [];
   if (durationSec > 1 && cues.length) {
     cues = rescaleCuesToDuration(cues, durationSec);
+    if (cuesNeedRescale(cues, durationSec, 2)) {
+      return NextResponse.json(
+        {
+          error: "Cue span does not match encoded audio within tolerance.",
+          audioDurationSec: durationSec,
+          cueEndSec: cueSpanEnd(cues),
+        },
+        { status: 422 },
+      );
+    }
   }
 
   const next = await updateJob(id, {
@@ -58,6 +66,7 @@ export async function POST(
     previewReady: true,
     status: "delivered",
     lyricCues: cues,
+    audioDurationSec: durationSec || null,
     ...(typeof body.songTitle === "string"
       ? { songTitle: body.songTitle.slice(0, 80) }
       : {}),
