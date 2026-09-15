@@ -236,7 +236,7 @@ export function PreviewStudio({ id }: { id: string }) {
               onListenProgress={onListenProgress}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
-              Free {PREVIEW_MAX_SECONDS}-second preview. Each word highlights as it is sung. This is
+              Free {PREVIEW_MAX_SECONDS}-second preview with lyrics on screen. This is
               original generated music, not a studio recording artist.
             </p>
             <button

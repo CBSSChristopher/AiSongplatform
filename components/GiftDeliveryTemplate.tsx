@@ -53,7 +53,7 @@ export function GiftDeliveryTemplate({
           ) : null}
         </div>
         <p className="pt-1 text-[var(--muted)]">
-          A keepsake in its own space — play below, follow the words, download the MP3
+          A keepsake in its own space — play below, read the lyrics, download the MP3
           for phone &amp; text
           {job.email ? (
             <>

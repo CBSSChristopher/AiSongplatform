@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LyricCue } from "@/lib/cues";
 import {
-  activeCueIndex,
   cueSpanEnd,
   cuesNeedRescale,
   rescaleCuesToDuration,
   resolvePlayableDurationSec,
   sealCueGaps,
-  wordsLookUnreliable,
 } from "@/lib/cues";
 import { listenRequirementHint, meetsListenRequirement } from "@/lib/listen";
 
@@ -53,7 +51,6 @@ export function LyricAudio({
   title?: string;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const activeRef = useRef<HTMLParagraphElement>(null);
   const lastTickRef = useRef(0);
   const listenedRef = useRef(0);
   const completeRef = useRef(false);
@@ -213,12 +210,7 @@ export function LyricAudio({
     }
   }, [src, autoPlay]);
 
-  const active = activeCueIndex(fittedCues, time);
-
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [active]);
-
+  // JOSEPH LOCK: lyric sync / karaoke highlight DEFERRED — static lyrics text only.
   const progress =
     playableDuration > 0
       ? Math.min(100, (time / playableDuration) * 100)
@@ -311,41 +303,16 @@ export function LyricAudio({
           </p>
         ) : null}
         {fittedCues.length ? (
-          fittedCues.map((cue, index) => {
-            const useWords =
-              Boolean(cue.words?.length) && !wordsLookUnreliable(cue);
-            return (
-              <p
-                key={`${cue.start}-${cue.text}`}
-                ref={index === active ? activeRef : undefined}
-                className={
-                  index === active
-                    ? "serif py-1.5 text-lg text-[var(--ink)]"
-                    : "py-1.5 text-[var(--muted)]"
-                }
-              >
-                {useWords
-                  ? cue.words!.map((word) => {
-                      const on = time >= word.start && time < word.end;
-                      return (
-                        <span
-                          key={`${word.start}-${word.text}`}
-                          className={
-                            on
-                              ? "rounded-sm bg-[var(--copper)]/25 px-0.5 text-[var(--ink)]"
-                              : undefined
-                          }
-                        >
-                          {word.text}{" "}
-                        </span>
-                      );
-                    })
-                  : cue.text}
-              </p>
-            );
-          })
+          fittedCues.map((cue) => (
+            <p
+              key={`${cue.start}-${cue.text}`}
+              className="py-1.5 text-[var(--ink)]"
+            >
+              {cue.text}
+            </p>
+          ))
         ) : (
-          <pre className="whitespace-pre-wrap text-[var(--muted)]">
+          <pre className="whitespace-pre-wrap text-[var(--ink)]">
             {fallbackLyrics}
           </pre>
         )}
