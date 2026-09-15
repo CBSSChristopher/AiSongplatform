@@ -7,6 +7,7 @@ import {
   rescaleCuesToDuration,
 } from "@/lib/cues";
 import { readAudio, getJob, publicJob, updateJob } from "@/lib/store";
+import { cuesWithSungWordsOnly, lyricsFromSungCues } from "@/lib/lyric-parse";
 import { resolveEncodedFullDurationSec } from "@/lib/true-duration";
 
 export default async function SongPage({
@@ -35,13 +36,21 @@ export default async function SongPage({
       const patch: {
         audioDurationSec?: number;
         lyricCues?: typeof job.lyricCues;
+        lyrics?: string;
       } = {};
       if (!(job.audioDurationSec && Math.abs(job.audioDurationSec - dur) < 0.5)) {
         patch.audioDurationSec = dur;
       }
-      if (cuesNeedRescale(job.lyricCues, dur, 2)) {
-        const nextCues = rescaleCuesToDuration(job.lyricCues, dur);
+      // Strip unsung shells before any rescale (fc06).
+      let workingCues = cuesWithSungWordsOnly(job.lyricCues || []);
+      if (workingCues.length !== (job.lyricCues || []).length) {
+        patch.lyricCues = workingCues;
+        patch.lyrics = lyricsFromSungCues(workingCues);
+      }
+      if (cuesNeedRescale(workingCues, dur, 2)) {
+        const nextCues = rescaleCuesToDuration(workingCues, dur);
         patch.lyricCues = nextCues;
+        patch.lyrics = lyricsFromSungCues(nextCues);
         console.info("[song] fitted lyric cues to encoded duration", {
           jobId: id,
           audioSec: dur,
@@ -75,7 +84,7 @@ export default async function SongPage({
           <GiftDeliveryTemplate
             job={pub}
             audioSrc={`/api/jobs/${id}/audio?full=1&format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
-            cues={job.lyricCues || []}
+            cues={cuesWithSungWordsOnly(job.lyricCues || [])}
             encodedDurationSec={encodedSec}
           />
         ) : (

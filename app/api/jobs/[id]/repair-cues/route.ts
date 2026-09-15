@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cueSpanEnd, cuesNeedRescale, rescaleCuesToDuration } from "@/lib/cues";
 import { getJob, publicJob, readAudio, updateJob } from "@/lib/store";
+import { cuesWithSungWordsOnly, lyricsFromSungCues } from "@/lib/lyric-parse";
 import { resolveEncodedFullDurationSec } from "@/lib/true-duration";
 
 export async function POST(
@@ -43,14 +44,28 @@ export async function POST(
     Boolean(force && body.forceRescale) ||
     cuesNeedRescale(job.lyricCues || [], durationSec, 2);
   // Secret unlocks repair on locked jobs; it must NOT stretch cues that already fit.
+  // Always strip unsung cue shells + align display lyrics (fc06 interim).
+  const sungCues = cuesWithSungWordsOnly(job.lyricCues || []);
+  const sungLyrics = sungCues.length ? lyricsFromSungCues(sungCues) : job.lyrics;
+  const lyricsDirty = sungLyrics !== job.lyrics;
+  const cuesDirty = sungCues.length !== (job.lyricCues || []).length;
+
   if (!needsFit) {
-    const next =
+    const durDirty = !(
       job.audioDurationSec && Math.abs(job.audioDurationSec - durationSec) < 0.5
-        ? job
-        : await updateJob(id, { audioDurationSec: durationSec });
+    );
+    const next =
+      durDirty || lyricsDirty || cuesDirty
+        ? await updateJob(id, {
+            audioDurationSec: durationSec,
+            lyricCues: sungCues,
+            lyrics: sungLyrics,
+          })
+        : job;
     return NextResponse.json({
       ok: true,
-      healed: false,
+      healed: Boolean(durDirty || lyricsDirty || cuesDirty),
+      strippedUnsung: cuesDirty || lyricsDirty,
       forced: force,
       audioDurationSec: durationSec,
       cueEndSec: before,
@@ -72,8 +87,10 @@ export async function POST(
       { status: 422 },
     );
   }
+  const stripped = cuesWithSungWordsOnly(nextCues);
   const next = await updateJob(id, {
-    lyricCues: nextCues,
+    lyricCues: stripped,
+    lyrics: stripped.length ? lyricsFromSungCues(stripped) : job.lyrics,
     audioDurationSec: durationSec,
   });
   return NextResponse.json({
