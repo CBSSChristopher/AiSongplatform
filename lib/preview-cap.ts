@@ -138,16 +138,71 @@ export function truncateMp3ToSeconds(bytes: Uint8Array, maxSeconds = PREVIEW_MAX
   if (!bytes || bytes.byteLength < 4 || maxSeconds <= 0) return bytes;
 
   const duration = readMp3DurationSeconds(bytes);
+  let cut: Uint8Array | null = null;
   if (duration && duration > maxSeconds + 0.5) {
     const keep = Math.floor(bytes.byteLength * (maxSeconds / duration));
-    return bytes.subarray(0, Math.max(keep, 4096));
+    cut = bytes.subarray(0, Math.max(keep, 4096));
+  } else if (duration && duration <= maxSeconds + 0.5) {
+    return bytes;
+  } else {
+    // Fallback when Xing is missing: ~180kbps average (matches current gift encodes).
+    const maxBytes = Math.floor((180_000 * maxSeconds) / 8) + 65_536;
+    if (bytes.byteLength <= maxBytes) return bytes;
+    cut = bytes.subarray(0, maxBytes);
   }
-  if (duration && duration <= maxSeconds + 0.5) return bytes;
+  // CRITICAL: never leave full-length Xing on a truncated preview body (iOS silent-halfway).
+  return rewriteXingForTruncatedPreview(cut, duration, maxSeconds);
+}
 
-  // Fallback when Xing is missing: ~180kbps average (matches current gift encodes).
-  const maxBytes = Math.floor((180_000 * maxSeconds) / 8) + 65_536;
-  if (bytes.byteLength <= maxBytes) return bytes;
-  return bytes.subarray(0, maxBytes);
+/** Patch Xing frames/bytes after a byte cut so scrubber duration matches the body. */
+function rewriteXingForTruncatedPreview(
+  bytes: Uint8Array,
+  originalDuration: number | null,
+  maxSeconds: number,
+): Uint8Array {
+  // Inline Xing patch (avoid circular imports with mp3.ts duration readers).
+  const start = skipId3(bytes);
+  const frame = findMpegFrame(bytes, start);
+  if (frame < 0) return bytes;
+  const versionBits = (bytes[frame + 1]! >> 3) & 0x03;
+  const layerBits = (bytes[frame + 1]! >> 1) & 0x03;
+  if (layerBits !== 1) return bytes;
+  const channelMode = (bytes[frame + 3]! >> 6) & 0x03;
+  const mono = channelMode === 3;
+  const side = versionBits === 3 ? (mono ? 17 : 32) : mono ? 9 : 17;
+  const xingAt = frame + 4 + side;
+  if (xingAt + 12 >= bytes.byteLength) return bytes;
+  const tag = String.fromCharCode(bytes[xingAt]!, bytes[xingAt + 1]!, bytes[xingAt + 2]!, bytes[xingAt + 3]!);
+  if (tag !== "Xing" && tag !== "Info") return bytes;
+  const flags =
+    (bytes[xingAt + 4]! << 24) |
+    (bytes[xingAt + 5]! << 16) |
+    (bytes[xingAt + 6]! << 8) |
+    bytes[xingAt + 7]!;
+  const out = new Uint8Array(bytes);
+  const ratio =
+    originalDuration && originalDuration > 0
+      ? Math.min(1, maxSeconds / originalDuration)
+      : bytes.byteLength / Math.max(bytes.byteLength, 1);
+  let cursor = xingAt + 8;
+  if (flags & 0x0001) {
+    const oldFrames =
+      (out[cursor]! << 24) | (out[cursor + 1]! << 16) | (out[cursor + 2]! << 8) | out[cursor + 3]!;
+    const newFrames = Math.max(1, Math.floor(oldFrames * ratio));
+    out[cursor] = (newFrames >>> 24) & 0xff;
+    out[cursor + 1] = (newFrames >>> 16) & 0xff;
+    out[cursor + 2] = (newFrames >>> 8) & 0xff;
+    out[cursor + 3] = newFrames & 0xff;
+    cursor += 4;
+  }
+  if (flags & 0x0002) {
+    const newBytes = out.byteLength;
+    out[cursor] = (newBytes >>> 24) & 0xff;
+    out[cursor + 1] = (newBytes >>> 16) & 0xff;
+    out[cursor + 2] = (newBytes >>> 8) & 0xff;
+    out[cursor + 3] = newBytes & 0xff;
+  }
+  return out;
 }
 
 export function capPreviewBytes(

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { brand } from "@/lib/brand";
 import { getJob, readAudio } from "@/lib/store";
 import { PREVIEW_MAX_SECONDS, capPreviewBytes } from "@/lib/preview-cap";
+import { mp3XingMismatch, wavDurationSeconds } from "@/lib/mp3";
 
 function parseRange(header: string | null, size: number): { start: number; end: number } | null {
   if (!header || !header.startsWith("bytes=") || size <= 0) return null;
@@ -88,8 +89,8 @@ export async function GET(
   try {
     const download = url.searchParams.get("download") === "1";
     const formatParam = (url.searchParams.get("format") || "").toLowerCase();
-    // Playback default: MP3 for iOS/Safari. WAV master for download / format=wav.
-    const wantWav = download || formatParam === "wav";
+    // Playback + phone download: MP3. Studio master: format=wav only.
+    const wantWav = formatParam === "wav";
     const wantMp3 = !wantWav;
 
     let bytes: Uint8Array | null = null;
@@ -98,11 +99,32 @@ export async function GET(
 
     if (wantMp3) {
       bytes = await readAudio(id, kind, "mp3");
+      // Paid full must never ship truncated preview MP3 with lying Xing.
+      if (kind === "full" && bytes && mp3XingMismatch(bytes)) {
+        console.error("[audio] full MP3 Xing/filesize mismatch — falling back to WAV", { id });
+        bytes = null;
+      }
+      if (kind === "full" && bytes) {
+        // Extra guard: if WAV master is clearly longer than ~preview, refuse preview-sized MP3.
+        const wav = await readAudio(id, "full", "wav");
+        const wavSec = wav ? wavDurationSeconds(wav) : 0;
+        if (wavSec > PREVIEW_MAX_SECONDS + 8 && bytes.byteLength < 1_200_000) {
+          // ~45s @128kbps ≈ 720KB; 1.2MB is still preview-ish for gift 85s@192k (~2MB).
+          const estSec = (bytes.byteLength * 8) / 160_000;
+          if (estSec < PREVIEW_MAX_SECONDS + 5) {
+            console.error("[audio] full MP3 looks preview-length — falling back to WAV", {
+              id,
+              mp3Bytes: bytes.byteLength,
+              wavSec,
+            });
+            bytes = null;
+          }
+        }
+      }
       if (bytes && bytes.byteLength > 0) {
         contentType = "audio/mpeg";
         ext = "mp3";
       } else {
-        // Fallback: WAV with Range still better than broken empty play.
         bytes = await readAudio(id, kind, "wav");
         contentType = "audio/wav";
         ext = "wav";
@@ -117,7 +139,7 @@ export async function GET(
       return NextResponse.json({ error: "Audio file missing." }, { status: 404 });
     }
 
-    // Unpaid path: never stream more than the free preview window (existing long assets included).
+    // Unpaid ONLY: hard 45s preview cap. Paid full must never be truncated here.
     if (kind === "preview") {
       bytes = capPreviewBytes(bytes, contentType, PREVIEW_MAX_SECONDS);
     }

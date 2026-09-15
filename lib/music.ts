@@ -433,9 +433,25 @@ export async function writePreviewAudio(job: SongJob) {
 
 export async function writeFullAudio(job: SongJob) {
   const rendered = await renderForJob(job, 135);
+  const { PREVIEW_MAX_SECONDS } = await import("./preview-cap");
+  const { assertPaidFullAudio, mp3XingMismatch } = await import("./mp3");
+
+  // HARD GATE: never publish preview-length / lying-Xing as paid full.
+  const gate = assertPaidFullAudio(rendered.wav, rendered.mp3, PREVIEW_MAX_SECONDS);
+  if (!gate.mp3Ok && gate.reason !== "missing_mp3") {
+    console.error("[music] dropping full MP3 (integrity failed)", {
+      jobId: job.id,
+      reason: gate.reason,
+      wavSec: gate.wavSec,
+      mp3Bytes: rendered.mp3?.byteLength ?? 0,
+      xingMismatch: rendered.mp3 ? mp3XingMismatch(rendered.mp3) : false,
+    });
+  }
+
   await writeAudio(job.id, "full", rendered.wav, "wav");
-  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
+  if (gate.mp3Ok && rendered.mp3 && rendered.mp3.byteLength > 0) {
     await writeAudio(job.id, "full", rendered.mp3, "mp3");
   }
+  // WAV master is always written; MP3 backfill via box ffmpeg if EL bitstream was bad.
   return rendered.cues;
 }
