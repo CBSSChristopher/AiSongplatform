@@ -19,6 +19,7 @@ async function main() {
     occasion: "just-because",
     senderName: "Dad",
     message: "",
+    songTitle: "",
     lyrics: "Verse 1\nYellow backpack by the door\n\nChorus\nThis is a song I made for Maya",
     lyricCues: [],
     includeLyricPrint: true,

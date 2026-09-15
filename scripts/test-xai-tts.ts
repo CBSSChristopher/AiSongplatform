@@ -28,6 +28,7 @@ const job: SongJob = {
   occasion: "just-because",
   senderName: "Dad",
   message: "",
+    songTitle: "",
   lyrics:
     "Verse 1\nYellow backpack by the door\nYou walked out brave\n\nChorus\nThis is a song I made for Maya\nPlay it when you need me",
   lyricCues: [],

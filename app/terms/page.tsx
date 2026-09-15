@@ -3,7 +3,7 @@ import { brand } from "@/lib/brand";
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms">
+    <LegalPage title="SongSnuggle Terms & Conditions">
       <p>
         {brand.name} sells a digital, personalized song generated from the details you provide. You
         review lyrics before a preview is made. Payment is one-time. There is no subscription.

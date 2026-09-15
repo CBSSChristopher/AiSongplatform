@@ -9,6 +9,7 @@ import {
   voices,
   type OccasionId,
 } from "@/lib/brand";
+import { suggestedSongTitles } from "@/lib/song-titles";
 
 const steps = ["Person", "Sound", "Story", "Message", "Review"] as const;
 
@@ -24,6 +25,7 @@ type FormState = {
   occasion: string;
   senderName: string;
   message: string;
+  songTitle: string;
 };
 
 const empty: FormState = {
@@ -38,6 +40,7 @@ const empty: FormState = {
   occasion: "just-because",
   senderName: "",
   message: "",
+  songTitle: "",
 };
 
 export function CreateWizard({ occasion }: { occasion?: string }) {
@@ -252,6 +255,41 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
               onChange={(event) => set("message", event.target.value)}
             />
           </label>
+          <div className="space-y-3 rounded-2xl border border-[var(--line)] bg-white/70 p-4">
+            <div>
+              <p className="text-sm font-medium text-[var(--ink)]">Song title</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Type your own, or tap a gentle suggestion. You can leave it blank.
+              </p>
+            </div>
+            <input
+              className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-3"
+              placeholder="e.g. For Maliya, Today"
+              value={form.songTitle}
+              onChange={(event) => set("songTitle", event.target.value)}
+              maxLength={80}
+            />
+            <div className="flex flex-wrap gap-2">
+              {suggestedSongTitles({
+                recipientName: form.recipientName,
+                occasion: form.occasion,
+                relationship: form.relationship,
+              }).map((title) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => set("songTitle", title)}
+                  className={`rounded-full border px-3 py-1.5 text-sm ${
+                    form.songTitle === title
+                      ? "border-[var(--copper)] bg-[#f8e7db]"
+                      : "border-[var(--line)] bg-white"
+                  }`}
+                >
+                  {title}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 
@@ -262,6 +300,7 @@ export function CreateWizard({ occasion }: { occasion?: string }) {
             <div>For {form.recipientName || "—"} · {form.relationship || "—"}</div>
             <div>Sound {form.genre} · {form.voice}</div>
             <div>Occasion {form.occasion}</div>
+            <div>Title {form.songTitle.trim() || "Untitled (we’ll use their name)"}</div>
             <div className="text-[var(--muted)]">{form.memories || "No memory added yet."}</div>
           </dl>
           <p className="text-sm text-[var(--muted)]">

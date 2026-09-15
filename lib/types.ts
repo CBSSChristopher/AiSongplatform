@@ -25,6 +25,8 @@ export type SongJob = {
   occasion: OccasionId | "";
   senderName: string;
   message: string;
+  /** Optional display title chosen/typed by the giver. */
+  songTitle: string;
   lyrics: string;
   lyricCues: LyricCue[];
   includeLyricPrint: boolean;

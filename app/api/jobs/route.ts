@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createJob, publicJob } from "@/lib/store";
 import { relationships, genres, voices, occasions } from "@/lib/brand";
+import { normalizeSongTitle } from "@/lib/song-titles";
 
 const ids = {
   relationship: new Set(relationships.map((item) => item.id)),
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     memories: String(body.memories || "").slice(0, 1200),
     senderName: String(body.senderName || "").slice(0, 80),
     message: String(body.message || "").slice(0, 1200),
+    songTitle: normalizeSongTitle(String(body.songTitle || "")),
     marketingOptIn: Boolean(body.marketingOptIn),
     status: "intake",
   });
