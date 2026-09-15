@@ -267,7 +267,8 @@ function channelHintFromFormat(hints?: PcmChannelHints): 1 | 2 | null {
 }
 
 /**
- * Infer PCM16 channel count.
+ * Infer PCM16 channel count (OFFLINE / unit tests only).
+ * Production pcm_44100 path always encodes stereo — do not call from toWavBuffer.
  * Do not trust expectedDuration alone: API duration / format hints win, then
  * byte-length 2× heuristics, then optional L/R decorrelation.
  */
@@ -530,16 +531,17 @@ async function parseMultipartMusic(response: Response): Promise<{ audio: Buffer;
   return { audio, meta };
 }
 
-function toWavBuffer(audio: Buffer, expectedDurationSec?: number, hints?: PcmChannelHints): Buffer {
+function toWavBuffer(audio: Buffer, _expectedDurationSec?: number, _hints?: PcmChannelHints): Buffer {
   if (isWav(audio)) return audio;
   if (isMp3(audio)) {
     throw new Error(
       "ElevenLabs returned MP3; pcm_44100 was unavailable. Convert to WAV is not supported on Workers — retry or check output_format.",
     );
   }
-  // Raw pcm_44100 — channel count inferred (mono mis-label → 2× speed; stereo mis-label → ½ speed).
-  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec, hints);
-  return encodePcm16Wav(audio, PCM_RATE, channels);
+  // Raw EL Music output_format=pcm_44100 is ALWAYS interleaved stereo PCM16 @ 44.1kHz.
+  // Never run detectPcmChannels in production: labeling stereo as mono → half-speed (Joseph after PR15).
+  // detectPcmChannels remains exported for offline unit tests only.
+  return encodePcm16Wav(audio, PCM_RATE, 2);
 }
 
 async function composeMusic(
