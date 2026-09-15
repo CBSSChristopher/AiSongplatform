@@ -18,7 +18,8 @@
     "test:xai-tts": "tsx scripts/test-xai-tts.ts",
     "test:elevenlabs-music": "tsx scripts/test-elevenlabs-music.ts",
     "test:whop-unlock": "tsx scripts/test-whop-unlock.ts",
-    "test:email": "tsx scripts/test-email.ts"
+    "test:email": "tsx scripts/test-email.ts",
+    "test:pcm-channels": "tsx scripts/test-pcm-channels.ts"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",

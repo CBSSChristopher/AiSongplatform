@@ -146,6 +146,11 @@ function readU16LE(buf: Uint8Array, offset: number) {
   return buf[offset] | (buf[offset + 1] << 8);
 }
 
+function readS16LE(buf: Uint8Array, offset: number) {
+  const u = readU16LE(buf, offset);
+  return u > 0x7fff ? u - 0x10000 : u;
+}
+
 /** Encode raw PCM16 LE into a WAV container. Default stereo — EL Music pcm_44100 is interleaved stereo. */
 function encodePcm16Wav(pcm: Buffer, sampleRate: number, channels = 2) {
   // Labeling stereo PCM as mono doubles perceived duration and halves tempo (Joseph "too slow").
@@ -169,21 +174,174 @@ function encodePcm16Wav(pcm: Buffer, sampleRate: number, channels = 2) {
   return buffer;
 }
 
-/** Infer channel count for raw PCM16. Prefer stereo when duration match or API default. */
-function detectPcmChannels(pcm: Buffer, sampleRate: number, expectedDurationSec?: number): 1 | 2 {
-  if (expectedDurationSec && expectedDurationSec > 0 && pcm.length > 0) {
-    const monoSec = pcm.length / 2 / sampleRate;
-    const stereoSec = pcm.length / 4 / sampleRate;
-    if (Math.abs(stereoSec - expectedDurationSec) <= Math.abs(monoSec - expectedDurationSec)) {
+/** Optional hints so we do not trust composition-plan duration alone. */
+export type PcmChannelHints = {
+  channels?: 1 | 2;
+  apiDurationSec?: number;
+  outputFormat?: string;
+  contentType?: string;
+};
+
+function nearDuration(actualSec: number, expectedSec: number, tol = 0.2): boolean {
+  if (!(expectedSec > 0) || !(actualSec > 0)) return false;
+  return Math.abs(actualSec - expectedSec) / expectedSec <= tol;
+}
+
+/**
+ * L/R decorrelation tie-breaker for the ambiguous byte-length case
+ * (monoSec ≈ 2×E and stereoSec ≈ E): mono interleaved as stereo pairs
+ * has L/R correlation ≈ interleaved lag-1; true stereo usually diverges.
+ */
+function guessChannelsFromDecorrelation(pcm: Buffer): 1 | 2 | null {
+  const frames = Math.min(Math.floor(pcm.length / 4), PCM_RATE * 2);
+  if (frames < 2048) return null;
+
+  let sumL = 0;
+  let sumR = 0;
+  for (let i = 0; i < frames; i += 1) {
+    sumL += readS16LE(pcm, i * 4);
+    sumR += readS16LE(pcm, i * 4 + 2);
+  }
+  const meanL = sumL / frames;
+  const meanR = sumR / frames;
+
+  let covLR = 0;
+  let varL = 0;
+  let varR = 0;
+  for (let i = 0; i < frames; i += 1) {
+    const L = readS16LE(pcm, i * 4) - meanL;
+    const R = readS16LE(pcm, i * 4 + 2) - meanR;
+    covLR += L * R;
+    varL += L * L;
+    varR += R * R;
+  }
+  const lrDen = Math.sqrt(varL * varR);
+  const lr = lrDen > 0 ? covLR / lrDen : 0;
+
+  const sampleCount = frames * 2;
+  const lagCount = sampleCount - 1;
+  let meanA = 0;
+  let meanB = 0;
+  let prev = readS16LE(pcm, 0);
+  for (let i = 1; i < sampleCount; i += 1) {
+    const s = readS16LE(pcm, i * 2);
+    meanA += prev;
+    meanB += s;
+    prev = s;
+  }
+  meanA /= lagCount;
+  meanB /= lagCount;
+
+  let covLag = 0;
+  let varA = 0;
+  let varB = 0;
+  prev = readS16LE(pcm, 0);
+  for (let i = 1; i < sampleCount; i += 1) {
+    const s = readS16LE(pcm, i * 2);
+    const a = prev - meanA;
+    const b = s - meanB;
+    covLag += a * b;
+    varA += a * a;
+    varB += b * b;
+    prev = s;
+  }
+  const lagDen = Math.sqrt(varA * varB);
+  const lag1 = lagDen > 0 ? covLag / lagDen : 0;
+  const delta = Math.abs(lr - lag1);
+
+  // Mono-as-stereo: stream lag-1 ≈ L/R corr and both are meaningfully correlated.
+  if (lag1 > 0.25 && delta < 0.01) return 1;
+  // Clear stereo separation (independent or clearly divergent channels).
+  if (delta >= 0.015 || (Math.abs(lr) < 0.2 && lag1 < 0.2)) return 2;
+  return null;
+}
+
+function channelHintFromFormat(hints?: PcmChannelHints): 1 | 2 | null {
+  if (!hints) return null;
+  if (hints.channels === 1 || hints.channels === 2) return hints.channels;
+  const blob = `${hints.outputFormat || ""} ${hints.contentType || ""}`.toLowerCase();
+  // Match mono/stereo even inside tokens like pcm_44100_stereo.
+  if (/(?:^|[^a-z])mono(?:[^a-z]|$)/.test(blob)) return 1;
+  if (/(?:^|[^a-z])stereo(?:[^a-z]|$)/.test(blob)) return 2;
+  return null;
+}
+
+/**
+ * Infer PCM16 channel count.
+ * Do not trust expectedDuration alone: API duration / format hints win, then
+ * byte-length 2× heuristics, then optional L/R decorrelation.
+ */
+export function detectPcmChannels(
+  pcm: Buffer,
+  sampleRate: number,
+  expectedDurationSec?: number,
+  hints?: PcmChannelHints,
+): 1 | 2 {
+  const formatHint = channelHintFromFormat(hints);
+  if (formatHint) return formatHint;
+
+  const monoSec = pcm.length > 0 && sampleRate > 0 ? pcm.length / 2 / sampleRate : 0;
+  const stereoSec = pcm.length > 0 && sampleRate > 0 ? pcm.length / 4 / sampleRate : 0;
+
+  const apiDur = hints?.apiDurationSec && hints.apiDurationSec > 0 ? hints.apiDurationSec : undefined;
+  if (apiDur && monoSec > 0) {
+    // Unambiguous API matches.
+    if (nearDuration(monoSec, apiDur) && !nearDuration(stereoSec, apiDur)) return 1;
+    // Ambiguous: stereoSec≈apiDur and monoSec≈2×apiDur — same trap as plan duration; use decorrelation.
+    if (nearDuration(stereoSec, apiDur) && nearDuration(monoSec, 2 * apiDur)) {
+      const deco = guessChannelsFromDecorrelation(pcm);
+      if (deco === 1) return 1;
+      if (deco === 2) return 2;
+      // Fall through to shared ambiguous handling below (E will be apiDur).
+    } else if (nearDuration(stereoSec, apiDur) && !nearDuration(monoSec, apiDur)) {
+      return 2;
+    } else if (Math.abs(monoSec - apiDur) < Math.abs(stereoSec - apiDur)) {
+      return 1;
+    } else if (Math.abs(stereoSec - apiDur) < Math.abs(monoSec - apiDur)) {
       return 2;
     }
-    // Mono-labeled stereo looks ~2× the planned length.
-    if (monoSec > expectedDurationSec * 1.5) return 2;
-    return 1;
   }
-  // ElevenLabs Music output_format=pcm_44100 is stereo PCM16 @ 44.1kHz.
+
+  const E = apiDur || (expectedDurationSec && expectedDurationSec > 0 ? expectedDurationSec : undefined);
+  if (E && monoSec > 0) {
+    // Ambiguous byte length: stereoSec≈E and monoSec≈2E (correct stereo OR double-length mono).
+    // Too-fast (mono labeled stereo) vs too-slow inverse — do not trust E alone; use decorrelation.
+    if (nearDuration(monoSec, 2 * E) && nearDuration(stereoSec, E)) {
+      const deco = guessChannelsFromDecorrelation(pcm);
+      // Clear mono-as-stereo → MONO (2× playback if labeled stereo).
+      if (deco === 1) return 1;
+      // Clear stereo → STEREO (½ speed if labeled mono).
+      if (deco === 2) return 2;
+      // Inconclusive: keep EL pcm_44100 stereo default (avoids reintroducing half-speed).
+      return 2;
+    }
+    // Explicit too-slow style input: caller passes observed wrong (mono) duration as E
+    // where monoSec≈E and stereoSec≈E/2 — handled below as clear mono match is wrong;
+    // when stereoSec≈2×E && monoSec≈E (E = half the mono duration / planned stereo), prefer STEREO.
+    if (nearDuration(stereoSec, 2 * E) && nearDuration(monoSec, E)) {
+      const deco = guessChannelsFromDecorrelation(pcm);
+      if (deco === 1) return 1;
+      return 2;
+    }
+    // Clear mono: duration matches mono only.
+    if (nearDuration(monoSec, E) && !nearDuration(stereoSec, E)) return 1;
+    // Clear stereo: duration matches stereo only (and not the 2× mono trap above).
+    if (nearDuration(stereoSec, E) && !nearDuration(monoSec, E)) return 2;
+
+    const deco = guessChannelsFromDecorrelation(pcm);
+    if (deco) return deco;
+
+    // Closer wins; ties prefer stereo only when not the 2×-mono pattern.
+    if (Math.abs(stereoSec - E) < Math.abs(monoSec - E)) return 2;
+    if (Math.abs(monoSec - E) < Math.abs(stereoSec - E)) return 1;
+  }
+
+  const deco = guessChannelsFromDecorrelation(pcm);
+  if (deco) return deco;
+  // ElevenLabs Music output_format=pcm_44100 defaults to stereo PCM16 @ 44.1kHz.
   return 2;
 }
+
 
 function isWav(buf: Uint8Array) {
   return buf.length >= 12 && asciiSlice(buf, 0, 4) === "RIFF" && asciiSlice(buf, 8, 12) === "WAVE";
@@ -279,6 +437,35 @@ function parseWordStamps(payload: unknown): WordStamp[] {
   return [];
 }
 
+/** Max word-stamp end time from detailed JSON (API-reported audio timeline). */
+export function apiDurationFromMeta(meta: unknown): number | undefined {
+  const stamps = parseWordStamps(meta);
+  if (!stamps.length) {
+    if (!meta || typeof meta !== "object") return undefined;
+    const root = meta as Record<string, unknown>;
+    const candidates = [
+      root.duration,
+      root.duration_sec,
+      root.durationSec,
+      root.duration_seconds,
+      root.song_duration,
+      root.audio_duration,
+      (root.json as Record<string, unknown> | undefined)?.duration,
+    ];
+    for (const c of candidates) {
+      const n = Number(c);
+      if (Number.isFinite(n) && n > 0) return n > 1000 ? n / 1000 : n;
+    }
+    return undefined;
+  }
+  let maxEnd = 0;
+  for (const s of stamps) {
+    if (s.end > maxEnd) maxEnd = s.end;
+  }
+  return maxEnd > 0 ? maxEnd : undefined;
+}
+
+
 function cuesFromWordStamps(lyrics: string, stamps: WordStamp[]): LyricCue[] | null {
   if (!stamps.length) return null;
   const lines = sungLines(lyrics);
@@ -343,15 +530,15 @@ async function parseMultipartMusic(response: Response): Promise<{ audio: Buffer;
   return { audio, meta };
 }
 
-function toWavBuffer(audio: Buffer, expectedDurationSec?: number): Buffer {
+function toWavBuffer(audio: Buffer, expectedDurationSec?: number, hints?: PcmChannelHints): Buffer {
   if (isWav(audio)) return audio;
   if (isMp3(audio)) {
     throw new Error(
       "ElevenLabs returned MP3; pcm_44100 was unavailable. Convert to WAV is not supported on Workers — retry or check output_format.",
     );
   }
-  // Raw pcm_44100 from ElevenLabs Music is interleaved stereo PCM16 @ 44.1kHz.
-  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec);
+  // Raw pcm_44100 — channel count inferred (mono mis-label → 2× speed; stereo mis-label → ½ speed).
+  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec, hints);
   return encodePcm16Wav(audio, PCM_RATE, channels);
 }
 
@@ -382,8 +569,13 @@ async function composeMusic(
   if (detailed.ok) {
     const parsed = await parseMultipartMusic(detailed);
     const expectedSec = compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
-    wav = toWavBuffer(parsed.audio, expectedSec);
     stamps = parseWordStamps(parsed.meta);
+    const hints: PcmChannelHints = {
+      apiDurationSec: apiDurationFromMeta(parsed.meta),
+      outputFormat: "pcm_44100",
+      contentType: detailed.headers.get("content-type") || undefined,
+    };
+    wav = toWavBuffer(parsed.audio, expectedSec, hints);
   } else {
     const detailedErr = await detailed.text().catch(() => "");
     // If detailed fails (e.g. 404/422), try plain compose once.
@@ -408,7 +600,11 @@ async function composeMusic(
       throw new Error(`ElevenLabs Music ${status}: ${hint} ${detail.slice(0, 240)}`);
     }
     const expectedSec = compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
-    wav = toWavBuffer(Buffer.from(await plain.arrayBuffer()), expectedSec);
+    const hints: PcmChannelHints = {
+      outputFormat: "pcm_44100",
+      contentType: plain.headers.get("content-type") || undefined,
+    };
+    wav = toWavBuffer(Buffer.from(await plain.arrayBuffer()), expectedSec, hints);
   }
 
   const duration = audioDurationSeconds(wav) || compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
