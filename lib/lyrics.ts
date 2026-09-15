@@ -71,12 +71,17 @@ export function draftLyrics(job: SongJob): string {
     .trim();
 }
 
-function lyricPrompt(job: SongJob) {
+function lyricPrompt(job: SongJob, options?: { fresh?: boolean }) {
   const genre = labelFor(genres, job.genre, "pop");
   return [
     "Write original gift-song lyrics a family would play more than once.",
     "Output lyrics only. No title, no commentary, no chord charts.",
     "Structure exactly: Verse 1, Chorus, Verse 2, Bridge, Final chorus.",
+    ...(options?.fresh
+      ? [
+          "This is a fresh alternate draft: keep the same facts and structure, but choose different imagery, metaphors, and rhyme paths than a first pass.",
+        ]
+      : []),
     "Craft rules:",
     "- Put the recipient first name in the chorus. Use it naturally, not every line.",
     "- Build verses from the supplied memory, qualities, and message. Specifics beat compliments.",
@@ -109,6 +114,7 @@ async function generateOpenAICompatible(options: {
   baseUrl: string;
   model: string;
   prompt: string;
+  temperature?: number;
 }) {
   const response = await fetch(`${options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
@@ -118,7 +124,7 @@ async function generateOpenAICompatible(options: {
     },
     body: JSON.stringify({
       model: options.model,
-      temperature: 0.7,
+      temperature: options.temperature ?? 0.7,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: options.prompt },
@@ -168,13 +174,23 @@ async function generateAnthropic(options: { apiKey: string; model: string; promp
   return content;
 }
 
-export async function generateLyrics(job: SongJob): Promise<string> {
+export async function generateLyrics(
+  job: SongJob,
+  options?: { fresh?: boolean },
+): Promise<string> {
   const provider = resolveLyricProvider();
-  const prompt = lyricPrompt(job);
+  const prompt = lyricPrompt(job, options);
+  const temperature = options?.fresh ? 0.95 : 0.7;
 
   // Explicit test/dev only — never a silent production fallback after API failure.
   if (provider === "template") {
-    return draftLyrics(job);
+    const base = draftLyrics(job);
+    if (!options?.fresh) return base;
+    // Light variation so "Try new lyrics" is not identical in template mode.
+    return base
+      .replace("I keep a list of little things", "I keep a pocketful of little things")
+      .replace("If a melody could hold a person", "If a song could hold a person")
+      .replace("Play it again. It's yours.", "Keep it close. It's yours.");
   }
 
   try {
@@ -186,6 +202,7 @@ export async function generateLyrics(job: SongJob): Promise<string> {
         baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         prompt,
+        temperature,
       });
     }
 
@@ -197,6 +214,7 @@ export async function generateLyrics(job: SongJob): Promise<string> {
         baseUrl: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
         model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
         prompt,
+        temperature,
       });
     }
 
