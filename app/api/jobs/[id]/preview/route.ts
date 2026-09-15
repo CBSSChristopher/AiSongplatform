@@ -16,12 +16,13 @@ export async function POST(
   }
 
   try {
-    const cues = await writePreviewAudio({ ...job });
+    const { cues, audioDurationSec } = await writePreviewAudio({ ...job });
     const next = await updateJob(id, {
       previewReady: true,
       listenCompletedAt: null,
       status: "preview",
       lyricCues: cues,
+      audioDurationSec: audioDurationSec || null,
     });
 
     return NextResponse.json({

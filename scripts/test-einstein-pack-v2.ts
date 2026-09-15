@@ -1,5 +1,5 @@
 /**
- * Einstein PERFECT LOCK v2 regression — BPM in positives; ban race energy; preview ≥60.
+ * Einstein PERFECT LOCK v2 regression — BPM in positives; ban race energy; preview = 45s hard cap.
  */
 import { buildCompositionPlan, bpmTokenForJob, negativeStylesForJob, positiveStylesForJob } from "../lib/music-elevenlabs";
 import { previewTargetSeconds } from "../lib/music";
@@ -71,16 +71,22 @@ function main() {
 
   const short = baseJob({ lyrics: "Verse 1\nHi\n\nChorus\nBye" });
   const shortTarget = previewTargetSeconds(short);
-  if (shortTarget < 60) throw new Error(`preview target ${shortTarget} < 60`);
-  if (shortTarget < 62 || shortTarget > 75) {
-    // heartfelt default is 70
-    if (shortTarget !== 70) throw new Error(`expected ~70 heartfelt, got ${shortTarget}`);
+  if (shortTarget !== 45) throw new Error(`preview target ${shortTarget} != 45 hard cap`);
+  assertPack(baseJob({ genre: "acoustic", voice: "male" }), "84 BPM");
+  assertPack(baseJob({ genre: "acoustic", voice: "female" }), "84 BPM");
+  const posA = positiveStylesForJob(baseJob({ genre: "acoustic", voice: "male" }));
+  if (!posA.some((s) => /male vocals|sung lyrics/i.test(s))) {
+    throw new Error("acoustic|male must force sung vocals");
+  }
+  const negA = negativeStylesForJob(baseJob({ genre: "acoustic", voice: "male" }));
+  for (const must of ["instrumental", "instrumental only", "no vocals"]) {
+    if (!negA.includes(must)) throw new Error(`acoustic negatives missing ${must}`);
   }
 
   const denseWords = Array.from({ length: 200 }, (_, i) => `word${i}`).join(" ");
   const dense = baseJob({ lyrics: denseWords });
   const denseTarget = previewTargetSeconds(dense);
-  if (denseTarget < 80 || denseTarget > 90) throw new Error(`dense target ${denseTarget} not in 80–90`);
+  if (denseTarget !== 45) throw new Error(`dense preview target ${denseTarget} != 45 hard cap`);
 
   console.log("einstein_pack_v2_ok", {
     popF: bpmTokenForJob(baseJob({ genre: "pop", voice: "female" })),

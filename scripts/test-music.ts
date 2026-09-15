@@ -35,7 +35,7 @@ async function main() {
   if (sungLines(job.lyrics).length !== 4) throw new Error("headers should not be sung");
   if (splitSyllables("Maya").length < 2) throw new Error("Maya should split into syllables");
 
-  const cues = await writePreviewAudio(job);
+  const { cues } = await writePreviewAudio(job);
   if (cues.length < 4) throw new Error(`expected sung lines, got ${cues.length}`);
   if (!cues.some((cue) => cue.text.includes("Maya"))) throw new Error("chorus line missing");
   if (cues[0].end <= cues[0].start) throw new Error("cue timing inverted");
@@ -81,7 +81,7 @@ ${"Filler line about morning light\n".repeat(12)}Chorus
 This is a song I made for Maya
 Play it when you need me`,
   };
-  const longCues = await writePreviewAudio(longJob);
+  const { cues: longCues } = await writePreviewAudio(longJob);
   if (!longCues.some((cue) => cue.text.includes("Maya"))) {
     throw new Error("preview dropped the named chorus line");
   }

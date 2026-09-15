@@ -394,11 +394,16 @@ async function renderForJob(job: SongJob, seconds: number): Promise<RenderedAudi
     try {
       return await renderWithElevenLabs(job, seconds);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? "");
       // Free EL Music returns HTTP 402 paid_plan_required — soft-fallback to xAI when available.
-      if (isElevenLabsPaidPlanError(error) && process.env.XAI_API_KEY) {
+      // Also fall back when EL returns instrumental / no sung timestamps (NO_VOCAL_PREVIEW).
+      if (
+        process.env.XAI_API_KEY &&
+        (isElevenLabsPaidPlanError(error) || /NO_VOCAL_PREVIEW/i.test(message))
+      ) {
         console.error(
-          "[music] ElevenLabs Music unavailable (paid plan); falling back to xAI.",
-          error instanceof Error ? error.message : error,
+          "[music] ElevenLabs Music unavailable or instrumental; falling back to xAI vocals+bed.",
+          message,
         );
         return renderWithXaiAndBed(job, seconds);
       }
@@ -418,18 +423,49 @@ export function previewTargetSeconds(_job: SongJob): number {
   return PREVIEW_MAX_SECONDS;
 }
 
-export async function writePreviewAudio(job: SongJob) {
+export async function writePreviewAudio(job: SongJob): Promise<{
+  cues: import("./cues").LyricCue[];
+  audioDurationSec: number;
+}> {
   const seconds = previewTargetSeconds(job);
   const rendered = await renderForJob(job, seconds);
   const { truncateWavToSeconds, truncateMp3ToSeconds } = await import("./preview-cap");
+  const { audioDurationSeconds } = await import("./music-elevenlabs");
+  const { cuesLookEqualSliced } = await import("./cues");
   const wav = Buffer.from(truncateWavToSeconds(new Uint8Array(rendered.wav), seconds));
+  let cues = (rendered.cues || []).filter((c) => c.start < seconds);
+  // a16 RCA: EL instrumental left equal-time fake word slices. Refuse empty cues;
+  // strip equal-sliced WORD timings (ban fake karaoke slices) — keep line highlights.
+  const equalSliced = cuesLookEqualSliced(cues);
+  if (!cues.length) {
+    throw new Error(
+      "NO_VOCAL_PREVIEW: preview has no lyric cues — refusing to publish.",
+    );
+  }
+  if (equalSliced) {
+    console.error("[music] stripping equal-time fake word slices from preview cues", {
+      jobId: job.id,
+      lines: cues.length,
+    });
+    cues = cues.map((c) => ({
+      text: c.text,
+      start: c.start,
+      end: c.end,
+      section: c.section,
+    }));
+  }
+
   await writeAudio(job.id, "preview", wav, "wav");
   if (rendered.mp3 && rendered.mp3.byteLength > 0) {
     const mp3 = Buffer.from(truncateMp3ToSeconds(new Uint8Array(rendered.mp3), seconds));
     await writeAudio(job.id, "preview", mp3, "mp3");
   }
-  // Drop cues that start at/after the hard cap so UI doesn't run past preview.
-  return (rendered.cues || []).filter((c) => c.start < seconds);
+  const audioDurationSec =
+    audioDurationSeconds(wav) || Math.min(seconds, cueSpanEnd(cues) || seconds);
+  return {
+    cues,
+    audioDurationSec: audioDurationSec > 1 ? audioDurationSec : seconds,
+  };
 }
 
 export async function writeFullAudio(job: SongJob) {

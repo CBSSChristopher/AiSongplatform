@@ -103,6 +103,27 @@ export function wordsLookUnreliable(cue: LyricCue): boolean {
 }
 
 /**
+ * True when karaoke word timings are uniform equal-time slices (distributeCues
+ * fingerprint) — NOT sung-aligned. Ban these for preview publish.
+ */
+export function cuesLookEqualSliced(cues: LyricCue[], minWords = 12): boolean {
+  const durs: number[] = [];
+  for (const cue of cues || []) {
+    for (const w of cue.words || []) {
+      const d = w.end - w.start;
+      if (d > 0) durs.push(Math.round(d * 1e6) / 1e6);
+    }
+  }
+  if (durs.length < minWords) return false;
+  const counts = new Map<number, number>();
+  for (const d of durs) counts.set(d, (counts.get(d) || 0) + 1);
+  let top = 0;
+  for (const n of counts.values()) if (n > top) top = n;
+  // a16 fingerprint: 187/197 exact same duration
+  return top / durs.length >= 0.75;
+}
+
+/**
  * Active lyric index without dead zones between cues.
  * Last cue whose start <= t (stays on last line through gaps and outro).
  */

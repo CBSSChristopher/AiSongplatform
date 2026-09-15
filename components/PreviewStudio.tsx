@@ -232,6 +232,7 @@ export function PreviewStudio({ id }: { id: string }) {
               fallbackLyrics={job.lyrics}
               autoPlay={playWhenReady}
               maxPlaySeconds={PREVIEW_MAX_SECONDS}
+              encodedDurationSec={job.audioDurationSec}
               onListenProgress={onListenProgress}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">

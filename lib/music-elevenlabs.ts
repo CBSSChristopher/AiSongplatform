@@ -63,6 +63,14 @@ const SHARED_NEGATIVES = [
   "draggy tempo",
   "race tempo",
   "two-step race",
+  "instrumental",
+  "instrumental only",
+  "no vocals",
+  "no singer",
+  "karaoke instrumental",
+  "backing track only",
+  "guitar solo bed",
+  "pad only",
 ] as const;
 
 type PackEntry = { positive: string[]; negativeExtra: string[]; bpmToken: string };
@@ -205,10 +213,90 @@ const HEARTFELT_PACK: Record<string, PackEntry> = {
     ],
     negativeExtra: ["trap hats race", "club r&b", "energetic groove", "auto-tune chatter"],
   },
+  "acoustic|female": {
+    bpmToken: "84 BPM",
+    positive: [
+      "acoustic folk ballad",
+      "intimate acoustic",
+      "female vocals",
+      "clear female singer",
+      "warm intimate female lead",
+      "sung lyrics throughout",
+      "lead vocal from the first line",
+      "singable melody",
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "84 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "fingerpicked acoustic guitar",
+      "soft acoustic arrangement",
+      "gentle brushed percussion",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "natural phrasing",
+    ],
+    negativeExtra: [
+      "instrumental",
+      "instrumental only",
+      "no vocals",
+      "driving acoustic guitar race",
+      "campfire jam race",
+      "bluegrass shred",
+    ],
+  },
+  "acoustic|male": {
+    bpmToken: "84 BPM",
+    positive: [
+      "acoustic folk ballad",
+      "intimate acoustic",
+      "male vocals",
+      "clear male singer",
+      "warm intimate male lead",
+      "sung lyrics throughout",
+      "lead vocal from the first line",
+      "singable melody",
+      "clear pitched melody",
+      "hook you can hum",
+      "in-tune lead vocal",
+      "on the beat",
+      "84 BPM",
+      "medium-slow tempo",
+      "ballad pacing",
+      "space between phrases",
+      "unhurried vowels",
+      "legato phrasing",
+      "fingerpicked acoustic guitar",
+      "soft acoustic arrangement",
+      "gentle brushed percussion",
+      "polished gift-song",
+      "great production quality",
+      "clear lyrics",
+      "heartfelt",
+      "natural phrasing",
+    ],
+    negativeExtra: [
+      "instrumental",
+      "instrumental only",
+      "no vocals",
+      "driving acoustic guitar race",
+      "campfire jam race",
+      "bluegrass shred",
+    ],
+  },
 };
+
 
 function normalizeGenre(genre: string): string {
   if (genre === "r&b" || genre === "rnb") return "rnb";
+  if (genre === "folk") return "acoustic";
   return genre || "pop";
 }
 
@@ -883,7 +971,13 @@ async function composeMusic(
   apiKey: string,
   lyrics: string,
   compositionPlan: { chunks: GenerationChunk[] },
-): Promise<{ wav: Buffer; mp3?: Buffer; cues: LyricCue[] }> {
+): Promise<{
+  wav: Buffer;
+  mp3?: Buffer;
+  cues: LyricCue[];
+  sungAligned: boolean;
+  stampCount: number;
+}> {
   const body = {
     model_id: MODEL_ID,
     composition_plan: compositionPlan,
@@ -989,7 +1083,9 @@ async function composeMusic(
     usableStamps.length && !stampsLookBroken(usableStamps, duration)
       ? cuesFromWordStamps(lyrics, usableStamps)
       : null;
-  const cues = fromStamps ?? distributeCues(lyrics, duration);
+  // Never invent equal-time fake karaoke slices here — callers decide fallback.
+  const cues = fromStamps ?? [];
+  const sungAligned = Boolean(fromStamps && fromStamps.length);
 
   try {
     const mp3Res = await mp3Promise;
@@ -1001,14 +1097,156 @@ async function composeMusic(
     // WAV master still saved; playback can fall back until backfill.
   }
 
-  return { wav, mp3, cues };
+  return { wav, mp3, cues, sungAligned, stampCount: usableStamps.length };
 }
 
-export async function renderWithElevenLabs(job: SongJob, targetSeconds: number) {
+const VOCAL_FORCE_POSITIVES = [
+  "sung lyrics throughout",
+  "lead vocal from the first line",
+  "clear intelligible singing",
+  "singer singing every lyric line",
+  "vocal melody on top of the arrangement",
+  "in-tune lead vocal",
+  "clear lyrics",
+] as const;
+
+const VOCAL_FORCE_NEGATIVES = [
+  "instrumental",
+  "instrumental only",
+  "no vocals",
+  "no singer",
+  "karaoke instrumental",
+  "backing track only",
+  "pad only",
+] as const;
+
+/** Inject hard vocal-forcing styles into every composition chunk (retry path). */
+export function injectVocalForce(plan: { chunks: GenerationChunk[] }): { chunks: GenerationChunk[] } {
+  return {
+    chunks: plan.chunks.map((chunk) => ({
+      ...chunk,
+      positive_styles: [...new Set([...chunk.positive_styles, ...VOCAL_FORCE_POSITIVES])],
+      negative_styles: [...new Set([...chunk.negative_styles, ...VOCAL_FORCE_NEGATIVES])],
+      context_adherence: "high" as const,
+    })),
+  };
+}
+
+/**
+ * Rough vocal presence from WAV PCM: mid(300–3400Hz)-ish energy via simple
+ * differentiator (highpass proxy) vs lowpassed energy. Instrumental beds
+ * (a16) score midFrac ≪ sung refs.
+ */
+export function vocalPresenceFromWav(wav: Uint8Array): { midFrac: number; rms: number } {
+  if (wav.byteLength < 64) return { midFrac: 0, rms: 0 };
+  const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  if (view.getUint32(0, false) !== 0x52494646 || view.getUint32(8, false) !== 0x57415645) {
+    return { midFrac: 0, rms: 0 };
+  }
+  let offset = 12;
+  let channels = 1;
+  let sampleRate = 44100;
+  let bits = 16;
+  let dataOffset = -1;
+  let dataBytes = 0;
+  while (offset + 8 <= wav.byteLength) {
+    const id = String.fromCharCode(wav[offset]!, wav[offset + 1]!, wav[offset + 2]!, wav[offset + 3]!);
+    const size = view.getUint32(offset + 4, true);
+    if (id === "fmt ") {
+      channels = view.getUint16(offset + 10, true) || 1;
+      sampleRate = view.getUint32(offset + 12, true) || 44100;
+      bits = view.getUint16(offset + 22, true) || 16;
+    } else if (id === "data") {
+      dataOffset = offset + 8;
+      dataBytes = size;
+      break;
+    }
+    offset += 8 + size + (size % 2);
+  }
+  if (dataOffset < 0 || bits !== 16 || dataBytes < sampleRate) return { midFrac: 0, rms: 0 };
+  const samples = Math.floor(dataBytes / 2);
+  const step = Math.max(1, Math.floor(channels)); // read first channel every frame
+  let sumSq = 0;
+  let lowSq = 0;
+  let midSq = 0;
+  let prev = 0;
+  let low = 0;
+  // One-pole lowpass ~200Hz + highpass residual as mid proxy.
+  const alpha = Math.exp((-2 * Math.PI * 200) / sampleRate);
+  const start = Math.min(samples, sampleRate); // skip ~1s
+  const end = Math.min(samples, sampleRate * 40);
+  let n = 0;
+  for (let i = start; i < end; i += step) {
+    const s = view.getInt16(dataOffset + i * 2, true) / 32768;
+    low = alpha * low + (1 - alpha) * s;
+    const mid = s - low; // highpassed-ish
+    sumSq += s * s;
+    lowSq += low * low;
+    midSq += mid * mid;
+    prev = s;
+    n += 1;
+  }
+  if (!n) return { midFrac: 0, rms: 0 };
+  const total = lowSq + midSq + 1e-12;
+  return { midFrac: midSq / total, rms: Math.sqrt(sumSq / n) };
+}
+
+/** Instrumental-only / no-sung-voice heuristic (paired with missing word stamps). */
+export function looksInstrumentalOnly(wav: Uint8Array, sungAligned: boolean): boolean {
+  if (sungAligned) return false;
+  const { midFrac, rms } = vocalPresenceFromWav(wav);
+  // Loud bed + weak mid + no alignment ⇒ instrumental (a16 midFrac ~0.05–0.15).
+  if (rms > 0.04 && midFrac < 0.22) return true;
+  if (!sungAligned && rms > 0.02) return true; // no stamps on audible audio
+  return !sungAligned;
+}
+
+export type ElevenLabsRender = {
+  wav: Buffer;
+  mp3?: Buffer;
+  cues: LyricCue[];
+  sungAligned: boolean;
+  stampCount: number;
+};
+
+export async function renderWithElevenLabs(job: SongJob, targetSeconds: number): Promise<ElevenLabsRender> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     throw new Error("ELEVENLABS_API_KEY is missing. Add it with: wrangler secret put ELEVENLABS_API_KEY");
   }
-  const plan = buildCompositionPlan(job, targetSeconds);
-  return composeMusic(apiKey, job.lyrics, plan);
+  let plan = buildCompositionPlan(job, targetSeconds);
+  let result = await composeMusic(apiKey, job.lyrics, plan);
+
+  const bad =
+    !result.sungAligned ||
+    looksInstrumentalOnly(result.wav, result.sungAligned) ||
+    result.cues.length === 0;
+
+  if (bad) {
+    console.error("[elevenlabs] first compose lacked sung alignment/vocals — retrying with vocal force", {
+      jobId: job.id,
+      sungAligned: result.sungAligned,
+      stampCount: result.stampCount,
+      cues: result.cues.length,
+      presence: vocalPresenceFromWav(result.wav),
+    });
+    plan = injectVocalForce(plan);
+    result = await composeMusic(apiKey, job.lyrics, plan);
+  }
+
+  const stillBad =
+    !result.sungAligned ||
+    result.cues.length === 0 ||
+    looksInstrumentalOnly(result.wav, result.sungAligned);
+
+  if (stillBad) {
+    const presence = vocalPresenceFromWav(result.wav);
+    throw new Error(
+      `NO_VOCAL_PREVIEW: ElevenLabs returned instrumental or no sung word timestamps ` +
+        `(sungAligned=${result.sungAligned}, stamps=${result.stampCount}, midFrac=${presence.midFrac.toFixed(3)}). ` +
+        `Refuse publishing equal-time fake karaoke cues.`,
+    );
+  }
+
+  return result;
 }
