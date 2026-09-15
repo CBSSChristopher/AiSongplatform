@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "songsnuggle",
-  "main": ".open-next/worker.js",
+  "main": "workers/entry.js",
   "account_id": "c26984df74d264105345ad1f424067b5",
   "compatibility_date": "2026-09-09",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],

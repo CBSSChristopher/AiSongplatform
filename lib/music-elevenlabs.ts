@@ -374,26 +374,80 @@ function packForJob(job: SongJob): PackEntry {
   return applyOverlay(base, job);
 }
 
-function nameEnunciationOverlays(job: SongJob): { positive: string[]; negativeExtra: string[] } {
+/**
+ * Sung name for EL styles / lyric text. Joseph bar: clear "Malia" — never feed
+ * hyphenated phonetics (mah-lee-ya) into positive styles or lyric chunks.
+ * Prefer a short clear first token from lyrics/recipient; strip mushy guides.
+ */
+export function sungNameForEnunciation(job: SongJob): string {
   const written = (job.recipientName || "").trim();
+  const first = written.split(/\s+/)[0] || "";
   const guide = (job.namePronunciation || "").trim();
-  // Only when a pronunciation guide is present — never leak phonetics into lyric chunk text.
-  if (!guide) return { positive: [], negativeExtra: [] };
-  const label = written || "the name";
+  const mushy =
+    !guide
+      ? false
+      : /[-–—]/.test(guide) ||
+        /\b(mah|muh|lee|lee-ya|ya)\b/i.test(guide) ||
+        guide.length > 18 ||
+        /\s/.test(guide);
+  // Joseph: sung clear Malia when recipient is Maliya / guide is mush.
+  if (/^maliya\b/i.test(first) || (mushy && /^mali/i.test(first))) {
+    return "Malia";
+  }
+  if (first) return first;
+  if (guide && !mushy) return guide;
+  return "the name";
+}
+
+/** Rewrite lyric text for EL compose: Joseph sung name (e.g. Malia) never Maliya mush. */
+export function lyricsForCompose(job: SongJob): string {
+  const raw = job.lyrics || "";
+  const sung = sungNameForEnunciation(job);
+  const first = (job.recipientName || "").trim().split(/\s+/)[0] || "";
+  if (!raw || !sung || sung === "the name") return raw;
+  let out = raw;
+  if (first && first.toLowerCase() !== sung.toLowerCase()) {
+    const re = new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+    out = out.replace(re, sung);
+  }
+  // Also normalize common mis-spellings toward sung Malia when applicable.
+  if (/^malia$/i.test(sung)) {
+    out = out.replace(/\bMaliya\b/g, "Malia").replace(/\bmaliya\b/g, "Malia");
+  }
+  return out;
+}
+
+function nameEnunciationOverlays(job: SongJob): { positive: string[]; negativeExtra: string[] } {
+  const label = sungNameForEnunciation(job);
+  const guide = (job.namePronunciation || "").trim();
+  const mushy =
+    !!guide &&
+    (/[-–—]/.test(guide) ||
+      /\b(mah|muh|lee|lee-ya|ya)\b/i.test(guide) ||
+      guide.length > 18 ||
+      /\s/.test(guide));
+  // Always push clear name enunciation for personalized gifts (not only when guide set).
+  const positive = [
+    `clear enunciation of the name ${label}`,
+    `pronounce ${label} carefully as ${label}`,
+    `sing the name ${label} with distinct syllables`,
+    `the name is ${label}`,
+  ];
+  // Only attach a pronunciation hint when it is NOT hyphenated mush.
+  if (guide && !mushy) {
+    positive.push(`pronounce the name like ${guide} when singing`);
+  }
   return {
-    positive: [
-      `clear enunciation of the name ${label}`,
-      `pronounce ${label} carefully`,
-      "distinct syllables for the name",
-      `pronounce the name like ${guide} when singing`,
-      `clear enunciation guided by ${guide}`,
-    ],
+    positive,
     negativeExtra: [
       "mumbled name",
       "rushed name",
       "slurred name",
       "wrong name",
       "phonetic spelling sung as lyrics",
+      "mah-lee-ya",
+      "Ma-lee-ya",
+      "singing hyphenated phonetics",
     ],
   };
 }
@@ -430,7 +484,7 @@ function clampDurationMs(ms: number) {
 
 /** Build music_v2 composition_plan chunks from job lyrics. Target total seconds. */
 export function buildCompositionPlan(job: SongJob, targetSeconds: number): { chunks: GenerationChunk[] } {
-  let sections = lyricSections(job.lyrics);
+  let sections = lyricSections(lyricsForCompose(job));
   if (!sections.length) {
     sections = [{ section: "verse", label: "Verse 1", lines: ["A song made just for you."] }];
   }
@@ -1318,7 +1372,8 @@ export async function renderWithElevenLabs(job: SongJob, targetSeconds: number):
   }
   // Always inject vocal-force styles on the plan (Einstein B) — still force_instrumental false.
   let plan = injectVocalForce(buildCompositionPlan(job, targetSeconds));
-  let result = await composeMusic(apiKey, job.lyrics, plan);
+  const composeLyrics = lyricsForCompose(job);
+  let result = await composeMusic(apiKey, composeLyrics, plan);
   let presence = vocalPresenceFromWav(result.wav);
 
   const isBad = () =>
@@ -1337,7 +1392,7 @@ export async function renderWithElevenLabs(job: SongJob, targetSeconds: number):
       presence,
     });
     plan = injectVocalForce(plan);
-    result = await composeMusic(apiKey, job.lyrics, plan);
+    result = await composeMusic(apiKey, composeLyrics, plan);
     presence = vocalPresenceFromWav(result.wav);
   }
 

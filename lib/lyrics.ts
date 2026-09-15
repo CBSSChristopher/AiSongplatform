@@ -95,13 +95,34 @@ function lyricPrompt(job: SongJob, options?: { fresh?: boolean }) {
     "- Final chorus can add one small lift, then land on the gift message.",
     "- English only. No copyrighted lyrics or famous melodies described.",
     "",
-    `Recipient name (spell exactly this way in every lyric line): ${job.recipientName || "not given"}`,
-    ...(clean(job.namePronunciation || "")
-      ? [
-          `How to pronounce when singing (guide only — do NOT put this phonetic spelling in the lyrics): ${clean(job.namePronunciation)}`,
-          `Pronounce the name like: ${clean(job.namePronunciation)} when singing; spell it in lyrics as: ${clean(job.recipientName) || "the written name"}.`,
-        ]
-      : []),
+    `Recipient name (gift card / title): ${job.recipientName || "not given"}`,
+    ...(() => {
+      const written = clean(job.recipientName || "");
+      const first = written.split(/\s+/)[0] || "";
+      const guide = clean(job.namePronunciation || "");
+      const mushy =
+        !!guide &&
+        (/[-–—]/.test(guide) ||
+          /\b(mah|muh|lee)\b/i.test(guide) ||
+          guide.length > 18);
+      const sung =
+        /^maliya\b/i.test(first) || (mushy && /^mali/i.test(first))
+          ? "Malia"
+          : first || written || "the written name";
+      const lines = [
+        `Spell the sung name in every lyric line as: ${sung} (clear gift spelling — never hyphenated phonetics).`,
+      ];
+      if (guide && !mushy) {
+        lines.push(
+          `How to pronounce when singing (guide only — do NOT put this phonetic spelling in the lyrics): ${guide}`,
+        );
+      } else if (mushy) {
+        lines.push(
+          `Ignore mushy phonetic guide — do not write mah-lee-ya in lyrics; write ${sung}.`,
+        );
+      }
+      return lines;
+    })(),
     `Relationship: ${labelFor(relationships, job.relationship, "loved one")}`,
     `Occasion: ${labelFor(occasions, job.occasion, "just because")}`,
     `Genre: ${genre}`,

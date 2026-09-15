@@ -91,6 +91,10 @@ export function LyricAudio({
     return list;
   }, [cues, playableDuration]);
 
+  const [playSrc, setPlaySrc] = useState(src);
+  const objectUrlRef = useRef<string | null>(null);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     listenedRef.current = 0;
     completeRef.current = false;
@@ -100,6 +104,48 @@ export function LyricAudio({
     setTime(0);
     setMediaDuration(0);
     setPlaying(false);
+  }, [src]);
+
+  // Systemic continuous-play: buffer same-origin MP3 as a blob URL so Safari
+  // does not depend on progressive Range/Content-Length mid-stream.
+  useEffect(() => {
+    let cancelled = false;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setPlaySrc(src);
+    const abs = src.startsWith("http") ? src : `${window.location.origin}${src}`;
+    (async () => {
+      try {
+        const res = await fetch(abs, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { Accept: "audio/mpeg,audio/*,*/*" },
+        });
+        if (!res.ok || cancelled) return;
+        const buf = await res.arrayBuffer();
+        if (cancelled || buf.byteLength < 1024) return;
+        const url = URL.createObjectURL(
+          new Blob([buf], { type: res.headers.get("content-type") || "audio/mpeg" }),
+        );
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrlRef.current = url;
+        setPlaySrc(url);
+      } catch {
+        /* keep network src — Range fast-path still required */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
   }, [src]);
 
   // Optional soft repair when full cues disagree with encoded/true duration.
@@ -197,7 +243,43 @@ export function LyricAudio({
       node.removeEventListener("pause", onPause);
       node.removeEventListener("ended", onPause);
     };
-  }, [src, onListenProgress, cap, encodedDurationSec, cueEnd]);
+  }, [playSrc, onListenProgress, cap, encodedDurationSec, cueEnd]);
+  // If playback stalls (waiting > 2.5s with no progress), nudge currentTime and resume.
+  useEffect(() => {
+    const node = audioRef.current;
+    if (!node) return;
+    const clearStall = () => {
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
+      }
+    };
+    const onWaiting = () => {
+      clearStall();
+      const frozenAt = node.currentTime || 0;
+      stallTimerRef.current = setTimeout(() => {
+        if (node.paused || node.ended) return;
+        if (Math.abs((node.currentTime || 0) - frozenAt) > 0.15) return;
+        try {
+          node.currentTime = Math.max(0, frozenAt + 0.05);
+          void node.play().catch(() => undefined);
+        } catch {
+          /* ignore */
+        }
+      }, 2500);
+    };
+    const onPlaying = () => clearStall();
+    node.addEventListener("waiting", onWaiting);
+    node.addEventListener("playing", onPlaying);
+    node.addEventListener("timeupdate", clearStall);
+    return () => {
+      clearStall();
+      node.removeEventListener("waiting", onWaiting);
+      node.removeEventListener("playing", onPlaying);
+      node.removeEventListener("timeupdate", clearStall);
+    };
+  }, [playSrc]);
+
 
   useEffect(() => {
     const node = audioRef.current;
@@ -208,7 +290,7 @@ export function LyricAudio({
     if (attempt) {
       attempt.catch(() => setBlocked(true));
     }
-  }, [src, autoPlay]);
+  }, [playSrc, autoPlay]);
 
   // JOSEPH LOCK: lyric sync / karaoke highlight DEFERRED — static lyrics text only.
   const progress =
@@ -266,8 +348,9 @@ export function LyricAudio({
         ref={audioRef}
         className={gift ? "sr-only" : "mt-3 w-full"}
         controls={!gift}
-        src={src}
-        preload="metadata"
+        src={playSrc}
+        preload="auto"
+        playsInline
         onSeeked={() => {
           const node = audioRef.current;
           if (!node || !cap) return;

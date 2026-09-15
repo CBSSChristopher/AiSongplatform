@@ -28,23 +28,51 @@ function parseRange(header: string | null, size: number): { start: number; end: 
   return { start, end };
 }
 
+function fixedAudioBody(bytes: Uint8Array): Uint8Array {
+  // Contiguous buffer so CF/workerd can advertise Content-Length (streams drop it).
+  return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+    ? bytes
+    : bytes.slice();
+}
+
+function asBodyInit(bytes: Uint8Array): BodyInit {
+  const u8 = fixedAudioBody(bytes);
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+}
+
 function audioResponse(
   bytes: Uint8Array,
   contentType: string,
   request: Request,
   extraHeaders: Record<string, string> = {},
 ) {
-  const size = bytes.byteLength;
+  const body = fixedAudioBody(bytes);
+  const size = body.byteLength;
   const base: Record<string, string> = {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
-    "Cache-Control": "no-store",
+    "Cache-Control": "private, no-cache, no-store, must-revalidate",
     ...extraHeaders,
   };
 
-  const range = parseRange(request.headers.get("range"), size);
+  const rangeHeader = request.headers.get("range");
+  if (rangeHeader && !parseRange(rangeHeader, size)) {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...base,
+        "Content-Range": `bytes */${size}`,
+        "Content-Length": "0",
+      },
+    });
+  }
+
+  const range = parseRange(rangeHeader, size);
+  const isHead = request.method === "HEAD";
   if (!range) {
-    return new NextResponse(Buffer.from(bytes), {
+    // Prefer platform Response + Uint8Array over NextResponse(Buffer) — OpenNext
+    // stream-wraps NextResponse and Cloudflare then omits Content-Length on GET.
+    return new Response(isHead ? null : asBodyInit(body), {
       status: 200,
       headers: {
         ...base,
@@ -54,8 +82,8 @@ function audioResponse(
   }
 
   const { start, end } = range;
-  const chunk = bytes.subarray(start, end + 1);
-  return new NextResponse(Buffer.from(chunk), {
+  const chunk = fixedAudioBody(body.subarray(start, end + 1));
+  return new Response(isHead ? null : asBodyInit(chunk), {
     status: 206,
     headers: {
       ...base,
@@ -166,7 +194,6 @@ export async function HEAD(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  // Reuse GET logic but drop body — Safari probes with HEAD sometimes.
-  const res = await GET(request, context);
-  return new NextResponse(null, { status: res.status, headers: res.headers });
+  // audioResponse already omits body when request.method === HEAD.
+  return GET(request, context);
 }
