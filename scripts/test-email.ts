@@ -30,6 +30,7 @@ const job: SongJob = {
   occasion: "just-because",
   senderName: "Dad",
   message: "",
+    songTitle: "",
   lyrics: "Chorus\nThis is a song I made for Maya",
   lyricCues: [],
   includeLyricPrint: true,

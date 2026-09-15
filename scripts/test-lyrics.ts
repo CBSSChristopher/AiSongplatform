@@ -17,6 +17,7 @@ const job = {
   occasion: "birthday",
   senderName: "Dad",
   message: "I am proud of you",
+    songTitle: "",
   lyrics: "",
   lyricCues: [],
   includeLyricPrint: false,

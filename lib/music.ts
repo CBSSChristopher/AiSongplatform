@@ -1,5 +1,6 @@
 import { writeAudio } from "./store";
 import type { LyricCue, LyricWordCue } from "./cues";
+import { cueSpanEnd, rescaleCuesToDuration } from "./cues";
 import { splitSyllables, sungLines } from "./lyric-parse";
 import { renderWithElevenLabs } from "./music-elevenlabs";
 import { renderWithXai } from "./music-xai";
@@ -453,5 +454,19 @@ export async function writeFullAudio(job: SongJob) {
     await writeAudio(job.id, "full", rendered.mp3, "mp3");
   }
   // WAV master is always written; MP3 backfill via box ffmpeg if EL bitstream was bad.
-  return rendered.cues;
+  // Fit cues to the master that was actually stored (not the EL stamp timeline).
+  const { audioDurationSeconds } = await import("./music-elevenlabs");
+  let cues = rendered.cues || [];
+  try {
+    const dur =
+      audioDurationSeconds(rendered.wav) ||
+      cueSpanEnd(cues) ||
+      0;
+    if (dur > 1 && cues.length) {
+      cues = rescaleCuesToDuration(cues, dur);
+    }
+  } catch (error) {
+    console.error("[music] cue rescale after full write failed", error);
+  }
+  return cues;
 }

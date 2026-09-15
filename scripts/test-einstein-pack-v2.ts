@@ -22,6 +22,7 @@ function baseJob(over: Partial<SongJob>): SongJob {
     occasion: "birthday",
     senderName: "Fajah",
     message: "happy 19th",
+    songTitle: "",
     lyrics: "Verse 1\nHello Maliya\n\nChorus\nHappy birthday",
     lyricCues: [],
     includeLyricPrint: false,

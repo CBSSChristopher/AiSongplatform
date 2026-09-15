@@ -604,7 +604,7 @@ function isMp3(buf: Uint8Array) {
   return asciiSlice(buf, 0, 3) === "ID3";
 }
 
-function audioDurationSeconds(wav: Uint8Array): number {
+export function audioDurationSeconds(wav: Uint8Array): number {
   if (!isWav(wav) || wav.length < 44) return 0;
   const sampleRate = (readU32LE(wav, 24) >>> 0) || PCM_RATE;
   const channels = readU16LE(wav, 22) || 1;
@@ -950,9 +950,14 @@ async function composeMusic(
     throw new Error(
       `Cue/WAV 2× mismatch (wav=${duration.toFixed(1)}s span=${span.toFixed(1)}s plan=${expectedSec.toFixed(1)}s) — channel encode bug, not cue scale`,
     );
-  } else if (span > 1 && duration > 1 && duration / span > 1.15 && duration / span < 1.35) {
-    // Mild drift only — never a full 2× paper-over.
-    usableStamps = scaleWordStamps(usableStamps, duration / span);
+  } else if (span > 1 && duration > 1) {
+    const ratio = duration / span;
+    // Shrink or stretch stamps onto real WAV length when they drift >2%.
+    // Never a full 2× paper-over (caught above). Allow shrink (ratio<1) for
+    // masters restored shorter than the alignment timeline (e.g. 85s audio, 105s cues).
+    if (ratio > 0.5 && ratio < 1.35 && Math.abs(ratio - 1) > 0.02) {
+      usableStamps = scaleWordStamps(usableStamps, ratio);
+    }
   }
   const fromStamps =
     usableStamps.length && !stampsLookBroken(usableStamps, duration)
