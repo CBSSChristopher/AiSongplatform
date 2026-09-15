@@ -232,10 +232,49 @@ function readS16LE(buf: Uint8Array, offset: number) {
   return u > 0x7fff ? u - 0x10000 : u;
 }
 
-/** Encode raw PCM16 LE into a WAV container. Default stereo — EL Music pcm_44100 is interleaved stereo. */
+/**
+ * Duplicate mono PCM16 LE samples to interleaved stereo L=R.
+ * Duration stays monoSec — NEVER just flip the WAV channel header (half-speed / too-fast).
+ */
+export function monoPcmToStereoPcm(pcm: Buffer): Buffer {
+  const frames = Math.floor(pcm.length / 2);
+  const out = Buffer.alloc(frames * 4);
+  for (let i = 0; i < frames; i += 1) {
+    const lo = pcm[i * 2]!;
+    const hi = pcm[i * 2 + 1]!;
+    const o = i * 4;
+    out[o] = lo;
+    out[o + 1] = hi;
+    out[o + 2] = lo;
+    out[o + 3] = hi;
+  }
+  return out;
+}
+
+/** Fail loudly when playback duration drifts >tol from plan/API (default 5%). */
+export function assertDuration(actualSec: number, expectedSec: number, tol = 0.05): void {
+  if (!(expectedSec > 0) || !(actualSec > 0)) {
+    throw new Error(
+      `WAV duration assert missing values (actual=${actualSec}, expected=${expectedSec})`,
+    );
+  }
+  const rel = Math.abs(actualSec - expectedSec) / expectedSec;
+  if (rel > tol) {
+    throw new Error(
+      `WAV duration ${actualSec.toFixed(3)}s != expected ${expectedSec.toFixed(3)}s ` +
+        `(${(rel * 100).toFixed(1)}% > ${(tol * 100).toFixed(0)}%) — refusing wrong-speed ship`,
+    );
+  }
+}
+
+/** Encode raw PCM16 LE into a stereo WAV container. Always ch=2 — never ship mono headers. */
 function encodePcm16Wav(pcm: Buffer, sampleRate: number, channels = 2) {
-  // Labeling stereo PCM as mono doubles perceived duration and halves tempo (Joseph "too slow").
-  const ch = channels === 1 ? 1 : 2;
+  // Ban mono-header-on-stereo-bytes (half-speed) and force-stereo-without-dup (too-fast).
+  // Callers must upconvert mono via monoPcmToStereoPcm before encode.
+  if (channels === 1) {
+    throw new Error("encodePcm16Wav: channels=1 banned — upconvert with monoPcmToStereoPcm first");
+  }
+  const ch = 2;
   const blockAlign = ch * 2;
   const buffer = Buffer.alloc(44 + pcm.length);
   buffer.write("RIFF", 0);
@@ -330,11 +369,10 @@ function guessChannelsFromDecorrelation(pcm: Buffer): 1 | 2 | null {
   const lag1 = lagDen > 0 ? covLag / lagDen : 0;
   const delta = Math.abs(lr - lag1);
 
-  // Proven fixture rule (rca-6704, too-fast, preview-el-*):
-  // Highly correlated L/R with high lag-1 → mono stream paired as stereo.
-  if (lr > 0.8 && lag1 > 0.8) return 1;
-  if (lag1 > 0.25 && delta < 0.02) return 1;
-  if (delta >= 0.015 || (Math.abs(lr) < 0.2 && lag1 < 0.2)) return 2;
+  // Centered true-stereo mixes often have lr>0.8 (0914 lr≈0.97) — do NOT treat high lr alone as mono.
+  // Tight delta: true mono consecutive-sample pairs keep lr≈lag1 (too-fast-6704 delta≈0.003).
+  if (lag1 > 0.25 && delta < 0.008) return 1;
+  if (delta >= 0.012 || (Math.abs(lr) < 0.2 && lag1 < 0.2)) return 2;
   return null;
 }
 
@@ -349,9 +387,9 @@ function channelHintFromFormat(hints?: PcmChannelHints): 1 | 2 | null {
 }
 
 /**
- * Infer PCM16 channel count for pcm_44100 payloads.
- * API duration / format hints win, then byte-length 2× heuristics, then L/R decorrelation.
- * Wired from toWavBuffer so mono EL payloads are not force-labeled stereo (2× too-fast).
+ * Infer PCM16 channel layout for pcm_44100 payloads (before stereo emission).
+ * Duration match wins over decorrelation — high L/R corr must NOT force mono when stereoSec≈E (0914).
+ * toWavBuffer always emits ch=2; mono detections are upconverted via monoPcmToStereoPcm.
  */
 export function detectPcmChannels(
   pcm: Buffer,
@@ -366,58 +404,28 @@ export function detectPcmChannels(
   const stereoSec = pcm.length > 0 && sampleRate > 0 ? pcm.length / 4 / sampleRate : 0;
 
   const apiDur = hints?.apiDurationSec && hints.apiDurationSec > 0 ? hints.apiDurationSec : undefined;
-  if (apiDur && monoSec > 0) {
-    // Unambiguous API matches (tight nearDuration tol — 0.09).
-    if (nearDuration(monoSec, apiDur) && !nearDuration(stereoSec, apiDur)) return 1;
-    // Ambiguous: stereoSec≈apiDur and monoSec≈2×apiDur — same trap as plan duration; use decorrelation.
-    if (nearDuration(stereoSec, apiDur) && nearDuration(monoSec, 2 * apiDur)) {
-      const deco = guessChannelsFromDecorrelation(pcm);
-      if (deco === 1) return 1;
-      if (deco === 2) return 2;
-      // Fall through to shared ambiguous handling below (E will be apiDur).
-    } else if (nearDuration(stereoSec, apiDur) && !nearDuration(monoSec, apiDur)) {
-      return 2;
-    } else {
-      // Weak/wrong apiDur (e.g. stamp span 90 vs true stereo 40 / monoSec 80):
-      // do NOT closer-wins to mono — that mislabeled locked pop-female. Prefer deco.
-      const deco = guessChannelsFromDecorrelation(pcm);
-      if (deco === 1) return 1;
-      if (deco === 2) return 2;
-      if (Math.abs(monoSec - apiDur) < Math.abs(stereoSec - apiDur)) return 1;
-      if (Math.abs(stereoSec - apiDur) < Math.abs(monoSec - apiDur)) return 2;
-    }
-  }
+  const planE = expectedDurationSec && expectedDurationSec > 0 ? expectedDurationSec : undefined;
+  // Prefer plan/API duration whose layout matches — apiDur used as corroboration, not override of stereoSec≈plan.
+  const E = planE || apiDur;
 
-  const E = apiDur || (expectedDurationSec && expectedDurationSec > 0 ? expectedDurationSec : undefined);
   if (E && monoSec > 0) {
-    // Ambiguous byte length: stereoSec≈E and monoSec≈2E (correct stereo OR double-length mono).
-    // Too-fast (mono labeled stereo) vs too-slow inverse — do not trust E alone; use decorrelation.
-    if (nearDuration(monoSec, 2 * E) && nearDuration(stereoSec, E)) {
-      const deco = guessChannelsFromDecorrelation(pcm);
-      // Clear mono-as-stereo → MONO (2× playback if labeled stereo).
-      if (deco === 1) return 1;
-      // Clear stereo → STEREO (½ speed if labeled mono).
-      if (deco === 2) return 2;
-      // Inconclusive: keep EL pcm_44100 stereo default (avoids reintroducing half-speed).
-      return 2;
-    }
-    // Explicit too-slow style input: caller passes observed wrong (mono) duration as E
-    // where monoSec≈E and stereoSec≈E/2 — handled below as clear mono match is wrong;
-    // when stereoSec≈2×E && monoSec≈E (E = half the mono duration / planned stereo), prefer STEREO.
+    // Clear mono: duration matches mono only (stereo would be ~half) → upconvert path.
+    if (nearDuration(monoSec, E) && !nearDuration(stereoSec, E)) return 1;
+    // Clear / ambiguous stereoSec≈E (incl. monoSec≈2E): prefer stereo. Centered mixes look mono-like (0914).
+    if (nearDuration(stereoSec, E)) return 2;
+    // stereoSec≈2E && monoSec≈E with wrong E (half of true mono): treat as mono for upconvert.
     if (nearDuration(stereoSec, 2 * E) && nearDuration(monoSec, E)) {
       const deco = guessChannelsFromDecorrelation(pcm);
       if (deco === 1) return 1;
       return 2;
     }
-    // Clear mono: duration matches mono only.
-    if (nearDuration(monoSec, E) && !nearDuration(stereoSec, E)) return 1;
-    // Clear stereo: duration matches stereo only (and not the 2× mono trap above).
-    if (nearDuration(stereoSec, E) && !nearDuration(monoSec, E)) return 2;
-
+    // apiDur may still disambiguate when plan E is weak.
+    if (apiDur && apiDur !== E) {
+      if (nearDuration(monoSec, apiDur) && !nearDuration(stereoSec, apiDur)) return 1;
+      if (nearDuration(stereoSec, apiDur)) return 2;
+    }
     const deco = guessChannelsFromDecorrelation(pcm);
     if (deco) return deco;
-
-    // Closer wins; ties prefer stereo only when not the 2×-mono pattern.
     if (Math.abs(stereoSec - E) < Math.abs(monoSec - E)) return 2;
     if (Math.abs(monoSec - E) < Math.abs(stereoSec - E)) return 1;
   }
@@ -626,7 +634,7 @@ async function parseMultipartMusic(response: Response): Promise<{ audio: Buffer;
   return { audio, meta };
 }
 
-/** Encode EL pcm_44100 (or pass-through WAV). Exported for fixture tests. */
+/** Encode EL pcm_44100 (or pass-through WAV). Always emits stereo WAV. Exported for fixture tests. */
 export function toWavBuffer(audio: Buffer, expectedDurationSec?: number, hints?: PcmChannelHints): Buffer {
   if (isWav(audio)) return audio;
   if (isMp3(audio)) {
@@ -634,9 +642,17 @@ export function toWavBuffer(audio: Buffer, expectedDurationSec?: number, hints?:
       "ElevenLabs returned MP3; pcm_44100 was unavailable. Convert to WAV is not supported on Workers — retry or check output_format.",
     );
   }
-  // Detect mono vs stereo from bytes + hints. Force-stereo on mono PCM → 2× too-fast (PR16).
-  const channels = detectPcmChannels(audio, PCM_RATE, expectedDurationSec, hints);
-  return encodePcm16Wav(audio, PCM_RATE, channels);
+  // Detect layout, then ALWAYS emit ch=2. Mono → duplicate L=R (same duration). Stereo → keep bytes.
+  // Ban: force-stereo-without-duplication (PR16) and mono-header-on-stereo-bytes (0914).
+  const detected = detectPcmChannels(audio, PCM_RATE, expectedDurationSec, hints);
+  const pcm = detected === 1 ? monoPcmToStereoPcm(audio) : audio;
+  const wav = encodePcm16Wav(pcm, PCM_RATE, 2);
+  const playback = audioDurationSeconds(wav);
+  const expect =
+    (expectedDurationSec && expectedDurationSec > 0 ? expectedDurationSec : undefined) ||
+    (hints?.apiDurationSec && hints.apiDurationSec > 0 ? hints.apiDurationSec : undefined);
+  if (expect) assertDuration(playback, expect, 0.05);
+  return wav;
 }
 
 
@@ -745,14 +761,23 @@ async function composeMusic(
     wav = toWavBuffer(Buffer.from(await plain.arrayBuffer()), expectedSec, hints);
   }
 
-  const duration = audioDurationSeconds(wav) || compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
+  const expectedSec = compositionPlan.chunks.reduce((s, c) => s + c.duration_ms, 0) / 1000;
+  const duration = audioDurationSeconds(wav) || expectedSec;
   let usableStamps = stamps;
   const span = stampSpanSec(usableStamps);
-  // When mono PCM was previously force-stereo, stamps often span ~½ the true WAV duration.
-  if (span > 1 && duration > 1 && nearDuration(duration, 2 * span, 0.15)) {
-    usableStamps = scaleWordStamps(usableStamps, duration / span);
-  } else if (span > 1 && duration > 1 && duration / span > 1.35 && duration / span < 2.4) {
-    // Softer 2×-ish mismatch (e.g. 90s wav vs ~45s stamps).
+  // NEVER 2×-scale cues to paper over a mono-header lie (0914). If wav≈2×span and span≈plan, channels are wrong.
+  if (
+    span > 1 &&
+    duration > 1 &&
+    nearDuration(duration, 2 * span, 0.15) &&
+    expectedSec > 0 &&
+    nearDuration(span, expectedSec, 0.15)
+  ) {
+    throw new Error(
+      `Cue/WAV 2× mismatch (wav=${duration.toFixed(1)}s span=${span.toFixed(1)}s plan=${expectedSec.toFixed(1)}s) — channel encode bug, not cue scale`,
+    );
+  } else if (span > 1 && duration > 1 && duration / span > 1.15 && duration / span < 1.35) {
+    // Mild drift only — never a full 2× paper-over.
     usableStamps = scaleWordStamps(usableStamps, duration / span);
   }
   const fromStamps =
