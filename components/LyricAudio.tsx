@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LyricCue } from "@/lib/cues";
 import { listenRequirementHint, meetsListenRequirement } from "@/lib/listen";
+import { PREVIEW_MAX_SECONDS } from "@/lib/preview-cap";
 
 function formatTime(seconds: number) {
   const safe = Math.max(0, seconds);
@@ -16,12 +17,15 @@ export function LyricAudio({
   cues,
   fallbackLyrics,
   autoPlay = false,
+  maxPlaySeconds,
   onListenProgress,
 }: {
   src: string;
   cues: LyricCue[];
   fallbackLyrics?: string;
   autoPlay?: boolean;
+  /** When set (preview), hard-stop playback at this many seconds. */
+  maxPlaySeconds?: number;
   /** Fired with accumulated real playtime (seeks ignored). Not fired from onLoadedData. */
   onListenProgress?: (info: {
     listenedSeconds: number;
@@ -39,6 +43,10 @@ export function LyricAudio({
   const [listened, setListened] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const cap =
+    typeof maxPlaySeconds === "number" && maxPlaySeconds > 0
+      ? maxPlaySeconds
+      : null;
 
   useEffect(() => {
     listenedRef.current = 0;
@@ -66,7 +74,21 @@ export function LyricAudio({
 
     const onTime = () => {
       const current = node.currentTime || 0;
-      const dur = Number.isFinite(node.duration) ? node.duration : 0;
+      const rawDur = Number.isFinite(node.duration) ? node.duration : 0;
+      const dur = cap && rawDur > 0 ? Math.min(rawDur, cap) : cap || rawDur;
+      if (cap && current >= cap) {
+        node.pause();
+        try {
+          node.currentTime = cap;
+        } catch {
+          /* ignore seek errors */
+        }
+        setTime(cap);
+        if (dur > 0) setDuration(dur);
+        setPlaying(false);
+        lastTickRef.current = cap;
+        return;
+      }
       setTime(current);
       if (dur > 0) setDuration(dur);
 
@@ -112,7 +134,7 @@ export function LyricAudio({
       node.removeEventListener("pause", onPause);
       node.removeEventListener("ended", onPause);
     };
-  }, [src, onListenProgress]);
+  }, [src, onListenProgress, cap]);
 
   useEffect(() => {
     const node = audioRef.current;
@@ -156,9 +178,25 @@ export function LyricAudio({
         >
           {playing ? "Pause song" : "Play song"}
         </button>
-        <p className="text-sm text-[var(--muted)]">{formatTime(time)}</p>
+        <p className="text-sm text-[var(--muted)]">
+          {formatTime(time)}
+          {cap ? ` / ${formatTime(cap)}` : duration ? ` / ${formatTime(duration)}` : ""}
+        </p>
       </div>
-      <audio ref={audioRef} className="mt-3 w-full" controls src={src} />
+      <audio
+        ref={audioRef}
+        className="mt-3 w-full"
+        controls
+        src={src}
+        onSeeked={() => {
+          const node = audioRef.current;
+          if (!node || !cap) return;
+          if ((node.currentTime || 0) > cap) {
+            node.currentTime = cap;
+            node.pause();
+          }
+        }}
+      />
       <p className="mt-2 text-sm text-[var(--muted)]">
         {listenRequirementHint(listened, duration)}
       </p>

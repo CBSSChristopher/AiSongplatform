@@ -4,6 +4,7 @@ import { splitSyllables, sungLines } from "./lyric-parse";
 import { renderWithElevenLabs } from "./music-elevenlabs";
 import { renderWithXai } from "./music-xai";
 import type { SongJob } from "./types";
+import { PREVIEW_MAX_SECONDS } from "./preview-cap";
 
 export { splitSyllables, sungLines } from "./lyric-parse";
 
@@ -411,27 +412,23 @@ export function isHeartfeltOccasion(occasion: string): boolean {
   return ["birthday", "anniversary", "in-memory", "thank-you", "wedding"].includes(occasion);
 }
 
-export function previewTargetSeconds(job: SongJob): number {
-  const occasion = job.occasion || "";
-  const heartfelt =
-    isHeartfeltOccasion(occasion) || job.genre === "lullaby" || occasion === "bedtime";
-  if (!heartfelt) {
-    // Non-heartfelt still retire ~50s race; give ballad room at 62s floor band.
-    return 62;
-  }
-  const words = (job.lyrics || "").trim().split(/\s+/).filter(Boolean).length;
-  if (words >= 180) return 85; // dense 80–90 band
-  return 70; // default heartfelt
+export function previewTargetSeconds(_job: SongJob): number {
+  // Hard lock to site “45-second preview” copy.
+  return PREVIEW_MAX_SECONDS;
 }
 
 export async function writePreviewAudio(job: SongJob) {
   const seconds = previewTargetSeconds(job);
   const rendered = await renderForJob(job, seconds);
-  await writeAudio(job.id, "preview", rendered.wav, "wav");
+  const { truncateWavToSeconds, truncateMp3ToSeconds } = await import("./preview-cap");
+  const wav = Buffer.from(truncateWavToSeconds(new Uint8Array(rendered.wav), seconds));
+  await writeAudio(job.id, "preview", wav, "wav");
   if (rendered.mp3 && rendered.mp3.byteLength > 0) {
-    await writeAudio(job.id, "preview", rendered.mp3, "mp3");
+    const mp3 = Buffer.from(truncateMp3ToSeconds(new Uint8Array(rendered.mp3), seconds));
+    await writeAudio(job.id, "preview", mp3, "mp3");
   }
-  return rendered.cues;
+  // Drop cues that start at/after the hard cap so UI doesn't run past preview.
+  return (rendered.cues || []).filter((c) => c.start < seconds);
 }
 
 export async function writeFullAudio(job: SongJob) {

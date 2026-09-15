@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { brand } from "@/lib/brand";
 import type { PublicSongJob } from "@/lib/types";
 import { LyricAudio } from "@/components/LyricAudio";
+import { PREVIEW_MAX_SECONDS } from "@/lib/preview-cap";
 
 export function PreviewStudio({ id }: { id: string }) {
   const router = useRouter();
@@ -230,11 +231,12 @@ export function PreviewStudio({ id }: { id: string }) {
               cues={job.lyricCues || []}
               fallbackLyrics={job.lyrics}
               autoPlay={playWhenReady}
+              maxPlaySeconds={PREVIEW_MAX_SECONDS}
               onListenProgress={onListenProgress}
             />
             <p className="mt-3 text-sm text-[var(--muted)]">
-              The preview sings your lyric lines over a backing track. Each word highlights as it
-              is sung. This is original generated music, not a studio recording artist.
+              Free {PREVIEW_MAX_SECONDS}-second preview. Each word highlights as it is sung. This is
+              original generated music, not a studio recording artist.
             </p>
             <button
               type="button"

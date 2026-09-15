@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { brand } from "@/lib/brand";
 import { getJob, readAudio } from "@/lib/store";
+import { PREVIEW_MAX_SECONDS, capPreviewBytes } from "@/lib/preview-cap";
 
 function parseRange(header: string | null, size: number): { start: number; end: number } | null {
   if (!header || !header.startsWith("bytes=") || size <= 0) return null;
@@ -114,6 +115,11 @@ export async function GET(
 
     if (!bytes || bytes.byteLength === 0) {
       return NextResponse.json({ error: "Audio file missing." }, { status: 404 });
+    }
+
+    // Unpaid path: never stream more than the free preview window (existing long assets included).
+    if (kind === "preview") {
+      bytes = capPreviewBytes(bytes, contentType, PREVIEW_MAX_SECONDS);
     }
 
     const filename = `${job.recipientName || brand.fileSlug}-${kind}.${ext}`.replace(
