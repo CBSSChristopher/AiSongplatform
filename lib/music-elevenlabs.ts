@@ -452,10 +452,21 @@ function nameEnunciationOverlays(job: SongJob): { positive: string[]; negativeEx
   };
 }
 
+/** EL Music rejects >50 styles per list. Keep head (pack) priority. */
+function clampStyleList(styles: string[], max = 50): string[] {
+  const uniq = [...new Set(styles.map((s) => s.trim()).filter(Boolean))];
+  return uniq.slice(0, max);
+}
+
 function negativeStylesFor(job: SongJob): string[] {
   const pack = packForJob(job);
   const overlays = nameEnunciationOverlays(job);
-  return [...new Set([...SHARED_NEGATIVES, ...pack.negativeExtra, ...overlays.negativeExtra])];
+  // Overlays first so name mush bans survive the 50-cap trim of long SHARED lists.
+  return clampStyleList([
+    ...overlays.negativeExtra,
+    ...SHARED_NEGATIVES,
+    ...pack.negativeExtra,
+  ]);
 }
 
 /** Exported for regression: birthday/heartfelt positives include BPM; ban race energy. */
@@ -463,7 +474,7 @@ export function positiveStylesForJob(job: SongJob, _section = ""): string[] {
   const pack = packForJob(job);
   // First-chunk styles dominate; keep exact pack list, then optional name enunciation overlays.
   const overlays = nameEnunciationOverlays(job);
-  return [...new Set([...pack.positive, ...overlays.positive])];
+  return clampStyleList([...overlays.positive, ...pack.positive]);
 }
 
 export function bpmTokenForJob(job: SongJob): string {
@@ -1185,8 +1196,8 @@ export function injectVocalForce(plan: { chunks: GenerationChunk[] }): { chunks:
   return {
     chunks: plan.chunks.map((chunk) => ({
       ...chunk,
-      positive_styles: [...new Set([...chunk.positive_styles, ...VOCAL_FORCE_POSITIVES])],
-      negative_styles: [...new Set([...chunk.negative_styles, ...VOCAL_FORCE_NEGATIVES])],
+      positive_styles: clampStyleList([...VOCAL_FORCE_POSITIVES, ...chunk.positive_styles]),
+      negative_styles: clampStyleList([...VOCAL_FORCE_NEGATIVES, ...chunk.negative_styles]),
       context_adherence: "high" as const,
     })),
   };
