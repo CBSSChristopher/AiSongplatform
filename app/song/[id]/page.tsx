@@ -25,7 +25,7 @@ export default async function SongPage({
         {unlocked ? (
           <>
             <LyricAudio
-              src={`/api/jobs/${id}/audio?full=1&t=${encodeURIComponent(job.updatedAt)}`}
+              src={`/api/jobs/${id}/audio?full=1&format=mp3&t=${encodeURIComponent(job.updatedAt)}`}
               cues={job.lyricCues || []}
               fallbackLyrics={job.lyrics}
             />

@@ -7,6 +7,8 @@ import type { SongJob } from "./types";
 
 export { splitSyllables, sungLines } from "./lyric-parse";
 
+export type RenderedAudio = { wav: Buffer; cues: LyricCue[]; mp3?: Buffer };
+
 function hashSeed(input: string) {
   let h = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
@@ -374,7 +376,7 @@ function isElevenLabsPaidPlanError(error: unknown): boolean {
   );
 }
 
-async function renderForJob(job: SongJob, seconds: number) {
+async function renderForJob(job: SongJob, seconds: number): Promise<RenderedAudio> {
   const provider = resolveMusicProvider();
   if (provider === "synth") {
     return renderSong(job, seconds);
@@ -424,13 +426,19 @@ export function previewTargetSeconds(job: SongJob): number {
 
 export async function writePreviewAudio(job: SongJob) {
   const seconds = previewTargetSeconds(job);
-  const { wav, cues } = await renderForJob(job, seconds);
-  await writeAudio(job.id, "preview", wav);
-  return cues;
+  const rendered = await renderForJob(job, seconds);
+  await writeAudio(job.id, "preview", rendered.wav, "wav");
+  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
+    await writeAudio(job.id, "preview", rendered.mp3, "mp3");
+  }
+  return rendered.cues;
 }
 
 export async function writeFullAudio(job: SongJob) {
-  const { wav, cues } = await renderForJob(job, 135);
-  await writeAudio(job.id, "full", wav);
-  return cues;
+  const rendered = await renderForJob(job, 135);
+  await writeAudio(job.id, "full", rendered.wav, "wav");
+  if (rendered.mp3 && rendered.mp3.byteLength > 0) {
+    await writeAudio(job.id, "full", rendered.mp3, "mp3");
+  }
+  return rendered.cues;
 }

@@ -857,7 +857,7 @@ async function composeMusic(
   apiKey: string,
   lyrics: string,
   compositionPlan: { chunks: GenerationChunk[] },
-): Promise<{ wav: Buffer; cues: LyricCue[] }> {
+): Promise<{ wav: Buffer; mp3?: Buffer; cues: LyricCue[] }> {
   const body = {
     model_id: MODEL_ID,
     composition_plan: compositionPlan,
@@ -866,7 +866,23 @@ async function composeMusic(
   };
 
   let wav: Buffer | null = null;
+  let mp3: Buffer | undefined;
   let stamps: WordStamp[] = [];
+
+  // Parallel MP3 for iOS <audio> — Workers cannot run ffmpeg/lamejs in time.
+  const mp3Promise = fetch(`${API_BASE}?output_format=mp3_44100_128`, {
+    method: "POST",
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "audio/*, application/json",
+    },
+    body: JSON.stringify({
+      model_id: MODEL_ID,
+      composition_plan: compositionPlan,
+      force_instrumental: false,
+    }),
+  }).catch(() => null);
 
   const detailed = await fetch(`${API_BASE}/detailed?output_format=pcm_44100`, {
     method: "POST",
@@ -943,7 +959,18 @@ async function composeMusic(
       ? cuesFromWordStamps(lyrics, usableStamps)
       : null;
   const cues = fromStamps ?? distributeCues(lyrics, duration);
-  return { wav, cues };
+
+  try {
+    const mp3Res = await mp3Promise;
+    if (mp3Res?.ok) {
+      const buf = Buffer.from(await mp3Res.arrayBuffer());
+      if (buf.byteLength > 512) mp3 = buf;
+    }
+  } catch {
+    // WAV master still saved; playback can fall back until backfill.
+  }
+
+  return { wav, mp3, cues };
 }
 
 export async function renderWithElevenLabs(job: SongJob, targetSeconds: number) {
