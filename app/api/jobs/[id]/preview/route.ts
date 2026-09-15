@@ -29,25 +29,38 @@ export async function POST(
   }
 
   try {
-    const { cues, audioDurationSec, previewGate, lyrics: sungLyrics } =
-      await writePreviewAudio({ ...job });
+    const {
+      cues,
+      audioDurationSec,
+      previewGate,
+      lyrics: sungLyrics,
+      masterSourceId,
+      masterFingerprint,
+    } = await writePreviewAudio({ ...job });
+    // writePreviewAudio throws on code-blocking failures. Ear/intelligibility may
+    // still leave gate.pass=false — previewReady allowed for MC ear URL, honest gate.
     if (!previewGate.pass) {
-      // Defense in depth — writePreviewAudio should have thrown.
-      await updateJob(id, {
-        previewReady: false,
-        previewGate,
-        lyricCues: cues,
-        lyrics: sungLyrics || job.lyrics,
-        audioDurationSec: audioDurationSec || null,
-      });
-      return NextResponse.json(
-        {
-          error: "PREVIEW_GATE_FAIL",
+      const { codeBlockingFailures } = await import("@/lib/preview-acceptance-gate");
+      const blocking = codeBlockingFailures(previewGate);
+      if (blocking.length) {
+        await updateJob(id, {
+          previewReady: false,
           previewGate,
-          job: publicJob({ ...job, previewReady: false, previewGate }),
-        },
-        { status: 422 },
-      );
+          lyricCues: cues,
+          lyrics: sungLyrics || job.lyrics,
+          audioDurationSec: audioDurationSec || null,
+          masterSourceId,
+          masterFingerprint,
+        });
+        return NextResponse.json(
+          {
+            error: "PREVIEW_GATE_FAIL",
+            previewGate,
+            job: publicJob({ ...job, previewReady: false, previewGate }),
+          },
+          { status: 422 },
+        );
+      }
     }
 
     const next = await updateJob(id, {
@@ -59,6 +72,8 @@ export async function POST(
       // Align display lyrics to sung cues — never keep unsung script after compose.
       lyrics: sungLyrics || job.lyrics,
       audioDurationSec: audioDurationSec || null,
+      masterSourceId,
+      masterFingerprint,
     });
 
     return NextResponse.json({

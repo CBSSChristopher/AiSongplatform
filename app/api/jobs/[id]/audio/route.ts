@@ -109,7 +109,17 @@ export async function GET(
     return NextResponse.json({ error: "Full song unlocks after payment." }, { status: 402 });
   }
 
-  const kind = wantFull && job.fullReady ? "full" : "preview";
+  // Joseph ONE-master / dual-asset P0: paid+fullReady → default /audio serves FULL
+  // (same master as ?full=1). Never leave 85s preview as default after promote.
+  const kind =
+    job.paidAt && job.fullReady
+      ? "full"
+      : wantFull && job.fullReady
+        ? "full"
+        : "preview";
+  if (wantFull && !(job.paidAt && job.fullReady) && !job.fullReady) {
+    // keep 402 already handled above for wantFull && !paidAt
+  }
   if (kind === "preview" && !job.previewReady) {
     return NextResponse.json({ error: "Preview is not ready yet." }, { status: 409 });
   }
@@ -117,33 +127,34 @@ export async function GET(
   try {
     const download = url.searchParams.get("download") === "1";
     const formatParam = (url.searchParams.get("format") || "").toLowerCase();
-    // Playback + phone download: MP3. Studio master: format=wav only.
+    // Playback + phone download: prefer MP3. Studio master: format=wav only.
+    // Elon P0: ?format=mp3 must NEVER return WAV (404 if MP3 missing).
     const wantWav = formatParam === "wav";
-    const wantMp3 = !wantWav;
+    const wantMp3Explicit = formatParam === "mp3";
+    const preferMp3 = !wantWav;
 
     let bytes: Uint8Array | null = null;
     let contentType = "audio/wav";
     let ext = "wav";
 
-    if (wantMp3) {
+    if (preferMp3) {
       bytes = await readAudio(id, kind, "mp3");
       // Paid full must never ship truncated preview MP3 with lying Xing.
       if (kind === "full" && bytes && mp3XingMismatch(bytes)) {
-        console.error("[audio] full MP3 Xing/filesize mismatch — falling back to WAV", { id });
+        console.error("[audio] full MP3 Xing/filesize mismatch", { id, wantMp3Explicit });
         bytes = null;
       }
       if (kind === "full" && bytes) {
-        // Extra guard: if WAV master is clearly longer than ~preview, refuse preview-sized MP3.
         const wav = await readAudio(id, "full", "wav");
         const wavSec = wav ? wavDurationSeconds(wav) : 0;
         if (wavSec > PREVIEW_MAX_SECONDS + 8 && bytes.byteLength < 1_200_000) {
-          // ~45s @128kbps ≈ 720KB; 1.2MB is still preview-ish for gift 85s@192k (~2MB).
           const estSec = (bytes.byteLength * 8) / 160_000;
           if (estSec < PREVIEW_MAX_SECONDS + 5) {
-            console.error("[audio] full MP3 looks preview-length — falling back to WAV", {
+            console.error("[audio] full MP3 looks preview-length", {
               id,
               mp3Bytes: bytes.byteLength,
               wavSec,
+              wantMp3Explicit,
             });
             bytes = null;
           }
@@ -152,6 +163,11 @@ export async function GET(
       if (bytes && bytes.byteLength > 0) {
         contentType = "audio/mpeg";
         ext = "mp3";
+      } else if (wantMp3Explicit) {
+        return NextResponse.json(
+          { error: "MP3 not available for this song (format=mp3 never returns WAV)." },
+          { status: 404 },
+        );
       } else {
         bytes = await readAudio(id, kind, "wav");
         contentType = "audio/wav";

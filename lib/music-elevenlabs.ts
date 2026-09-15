@@ -1424,22 +1424,20 @@ export async function renderWithElevenLabs(job: SongJob, targetSeconds: number):
 
   if (isBad()) {
     const scriptMissing = displayLinesMissingFromSung(composeLyrics, result.cues);
-    const hardFail =
-      !result.sungAligned ||
-      result.cues.length === 0 ||
-      looksInstrumentalOnly(result.wav, result.sungAligned);
-    if (hardFail) {
+    // HARD FAIL — never soft-allow / soft-publish with trimmed display lyrics after retries.
+    // Recompose again upstream or explicit fail state (not previewReady with stripped script).
+    if (scriptMissing.length) {
       throw new Error(
-        `NO_VOCAL_PREVIEW: ElevenLabs returned instrumental or no sung word timestamps ` +
-          `(sungAligned=${result.sungAligned}, stamps=${result.stampCount}, midFrac=${presence.midFrac.toFixed(3)}). ` +
-          `Refuse publishing equal-time fake karaoke cues.`,
+        `NO_VOCAL_PREVIEW: script lines still missing from sung stamps after retries ` +
+          `(missing=${scriptMissing.length}, sample=${JSON.stringify(scriptMissing.slice(0, 2))}). ` +
+          `Refuse soft-publish with stripped display lyrics.`,
       );
     }
-    // Retries exhausted but vocals exist — write*Audio strips unsung script from display.
-    console.error("[elevenlabs] script lines still missing after retries — strip at publish", {
-      jobId: job.id,
-      missing: scriptMissing.slice(0, 4),
-    });
+    throw new Error(
+      `NO_VOCAL_PREVIEW: ElevenLabs returned instrumental or no sung word timestamps ` +
+        `(sungAligned=${result.sungAligned}, stamps=${result.stampCount}, midFrac=${presence.midFrac.toFixed(3)}). ` +
+        `Refuse publishing equal-time fake karaoke cues.`,
+    );
   }
 
   return result;

@@ -144,7 +144,14 @@ async function tryServeAudio(request, env) {
     });
   }
 
-  const kind = wantFull && job.fullReady ? "full" : "preview";
+  // Joseph ONE-master / dual-asset P0: paid+fullReady → default serves FULL
+  // (same master as ?full=1). Never leave stale preview as default after promote.
+  const kind =
+    job.paidAt && job.fullReady
+      ? "full"
+      : wantFull && job.fullReady
+        ? "full"
+        : "preview";
   if (kind === "preview" && !job.previewReady) {
     return new Response(JSON.stringify({ error: "Preview is not ready yet." }), {
       status: 409,
@@ -155,6 +162,8 @@ async function tryServeAudio(request, env) {
   const download = url.searchParams.get("download") === "1";
   const formatParam = (url.searchParams.get("format") || "").toLowerCase();
   const wantWav = formatParam === "wav";
+  // Elon P0: ?format=mp3 must NEVER return WAV.
+  const wantMp3Explicit = formatParam === "mp3";
 
   let bytes = null;
   let contentType = "audio/mpeg";
@@ -169,6 +178,18 @@ async function tryServeAudio(request, env) {
       contentType = "audio/mpeg";
       ext = "mp3";
     }
+  }
+
+  if ((!bytes || bytes.byteLength === 0) && wantMp3Explicit) {
+    return new Response(
+      JSON.stringify({
+        error: "MP3 not available for this song (format=mp3 never returns WAV).",
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json", "X-Audio-Fastpath": "1" },
+      },
+    );
   }
 
   if (!bytes || bytes.byteLength === 0) {

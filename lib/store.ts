@@ -36,6 +36,8 @@ export function publicJob(job: SongJob): PublicSongJob {
     fullReady: job.fullReady,
     paidAt: job.paidAt,
     audioDurationSec: job.audioDurationSec ?? null,
+    masterSourceId: job.masterSourceId ?? null,
+    masterFingerprint: job.masterFingerprint ?? null,
   };
 }
 
@@ -81,6 +83,8 @@ export async function createJob(partial: Partial<SongJob>): Promise<SongJob> {
     lyricCues: [],
     includeLyricPrint: false,
     previewReady: false,
+    masterSourceId: null,
+    masterFingerprint: null,
     previewGate: null,
     listenCompletedAt: null,
     fullReady: false,

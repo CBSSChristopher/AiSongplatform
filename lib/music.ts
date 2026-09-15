@@ -470,6 +470,8 @@ export async function writePreviewAudio(job: SongJob): Promise<{
   previewGate: import("./preview-acceptance-gate").PreviewGateResult;
   /** Sung-aligned display lyrics (never unsung script). */
   lyrics: string;
+  masterSourceId: string;
+  masterFingerprint: string;
 }> {
   const seconds = previewTargetSeconds(job);
   const rendered = await renderForJob(job, seconds);
@@ -512,6 +514,12 @@ export async function writePreviewAudio(job: SongJob): Promise<{
 
   // Gate on the EXACT WAV bytes we will publish (single-compose source).
   // Einstein A: never write a sibling MP3 from a second compose.
+  const { audioHeadFingerprint, newMasterSourceId } = await import("./master-source");
+  const { codeBlockingFailures } = await import("./preview-acceptance-gate");
+  const masterFingerprint = audioHeadFingerprint(wav);
+  const masterSourceId =
+    job.masterSourceId || newMasterSourceId(job.id, masterFingerprint);
+
   const previewGate = runPreviewAcceptanceGate({
     job: jobForGate,
     publishedWav: wav,
@@ -531,10 +539,15 @@ export async function writePreviewAudio(job: SongJob): Promise<{
     // Intelligibility: ASR/human ear still required — do not auto-pass.
     asrOverlap: null,
     coldLinkEarPass: null,
+    masterSourceId,
+    masterFingerprint,
+    gatePhase: "preview",
   });
 
-  if (!previewGate.pass) {
-    // FAIL = no public preview bytes / no previewReady flip. Attach gate for route persist.
+  // Code-blocking failures (not ear-pending) refuse writing public bytes.
+  // Gate.pass stays honest: false while intelligibility/ear fail.
+  const blocking = codeBlockingFailures(previewGate);
+  if (blocking.length) {
     const err = new Error(
       `PREVIEW_GATE_FAIL: ${previewGate.failures.length} proof(s) failed — ` +
         previewGate.failures
@@ -555,13 +568,48 @@ export async function writePreviewAudio(job: SongJob): Promise<{
     audioDurationSec: duration,
     previewGate,
     lyrics: sungLyrics,
+    masterSourceId,
+    masterFingerprint,
   };
 }
 
+/**
+ * Joseph ONE-master: after full is written, overwrite preview KV with a
+ * preview-cap (truncate) of THAT full master so preview page and song page
+ * share the same voice/cadence/take. Never leave a parallel preview take.
+ */
+export async function syncPreviewFromFullMaster(
+  jobId: string,
+  fullWav: Uint8Array | Buffer | null,
+  fullMp3: Uint8Array | Buffer | null,
+  previewCapSec: number,
+): Promise<{ previewDerivedFromFull: true }> {
+  const { truncateWavToSeconds, truncateMp3ToSeconds } = await import("./preview-cap");
+  if (fullWav && fullWav.byteLength > 1024) {
+    const capped = truncateWavToSeconds(new Uint8Array(fullWav), previewCapSec);
+    await writeAudio(jobId, "preview", Buffer.from(capped), "wav");
+  } else {
+    await deleteAudio(jobId, "preview", "wav");
+  }
+  if (fullMp3 && fullMp3.byteLength > 1024) {
+    const capped = truncateMp3ToSeconds(new Uint8Array(fullMp3), previewCapSec);
+    await writeAudio(jobId, "preview", Buffer.from(capped), "mp3");
+  } else {
+    // Avoid stale MP3 from a different take lying as preview.
+    await deleteAudio(jobId, "preview", "mp3");
+  }
+  return { previewDerivedFromFull: true };
+}
+
 export async function writeFullAudio(job: SongJob) {
+  // Paid path: ONE compose at full length, then preview = cap of that master.
+  // Do not keep an earlier free-preview take after unlock (Joseph ONE-master).
+  const priorPreview = await (await import("./store")).readAudio(job.id, "preview", "wav");
   const rendered = await renderForJob(job, 135);
   const { PREVIEW_MAX_SECONDS } = await import("./preview-cap");
   const { assertPaidFullAudio, mp3XingMismatch } = await import("./mp3");
+  const { audioHeadFingerprint, newMasterSourceId, bytesLookSameMasterFamily } =
+    await import("./master-source");
 
   // HARD GATE: never publish preview-length / lying-Xing as paid full.
   const gate = assertPaidFullAudio(rendered.wav, rendered.mp3, PREVIEW_MAX_SECONDS);
@@ -575,10 +623,25 @@ export async function writeFullAudio(job: SongJob) {
     });
   }
 
+  const fullMp3 = gate.mp3Ok && rendered.mp3 && rendered.mp3.byteLength > 0 ? rendered.mp3 : null;
   await writeAudio(job.id, "full", rendered.wav, "wav");
-  if (gate.mp3Ok && rendered.mp3 && rendered.mp3.byteLength > 0) {
-    await writeAudio(job.id, "full", rendered.mp3, "mp3");
+  if (fullMp3) {
+    await writeAudio(job.id, "full", fullMp3, "mp3");
   }
+
+  const related = bytesLookSameMasterFamily(
+    priorPreview,
+    new Uint8Array(rendered.wav),
+  );
+  const parallelFullRecompose = Boolean(priorPreview?.byteLength) && !related.ok;
+
+  // Always overwrite preview from THIS full master (cap) — clears dual-take.
+  const capSec = Math.max(previewTargetSeconds(job), PREVIEW_MAX_SECONDS);
+  await syncPreviewFromFullMaster(job.id, rendered.wav, fullMp3, capSec);
+
+  const masterFingerprint = audioHeadFingerprint(new Uint8Array(rendered.wav));
+  const masterSourceId = newMasterSourceId(job.id, masterFingerprint);
+
   // WAV master is always written; MP3 backfill via box ffmpeg if EL bitstream was bad.
   // Fit cues to the master that was actually stored (not the EL stamp timeline).
   const { audioDurationSeconds } = await import("./music-elevenlabs");
@@ -589,7 +652,7 @@ export async function writeFullAudio(job: SongJob) {
     const dur =
       (await resolveEncodedFullDurationSec({
         wav: rendered.wav,
-        mp3: gate.mp3Ok ? rendered.mp3 : null,
+        mp3: fullMp3,
         cues,
       })) ||
       audioDurationSeconds(rendered.wav) ||
@@ -614,5 +677,12 @@ export async function writeFullAudio(job: SongJob) {
   } catch (error) {
     console.error("[music] cue rescale after full write failed", error);
   }
-  return { cues, audioDurationSec };
+  return {
+    cues,
+    audioDurationSec,
+    masterSourceId,
+    masterFingerprint,
+    previewDerivedFromFull: true as const,
+    parallelFullRecompose,
+  };
 }

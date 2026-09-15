@@ -59,7 +59,11 @@ export type PreviewGateProofId =
   | "einstein_music_bar_duration"
   | "einstein_xai_same_rules"
   | "einstein_el_music_sung_preview"
-  | "einstein_display_lyrics_match_sung";
+  | "einstein_display_lyrics_match_sung"
+  // Elon / Joseph ONE-master
+  | "elon_same_master_source_id"
+  | "elon_full_extends_preview_master"
+  | "elon_refuse_parallel_full_recompose";
 
 export type PreviewGateProof = {
   id: PreviewGateProofId;
@@ -82,6 +86,8 @@ export type PreviewGateResult = {
   equalSliced?: boolean;
   singleComposeSource?: boolean;
   provider?: "elevenlabs" | "xai" | "synth" | "unknown";
+  masterSourceId?: string | null;
+  masterFingerprint?: string | null;
 };
 
 export type PreviewGateInput = {
@@ -120,6 +126,28 @@ export type PreviewGateInput = {
   payPathPresent?: boolean;
   /** Dual-compose was used for this render — hard FAIL. */
   dualComposeUsed?: boolean;
+  /**
+   * Joseph ONE-master: shared compose/source id for preview + full.
+   * Required for paid/promote gates; preview-only may mint a new id.
+   */
+  masterSourceId?: string | null;
+  /** Fingerprint of published master head bytes. */
+  masterFingerprint?: string | null;
+  /** Prior preview master id (from job) — must match when full is gated. */
+  priorMasterSourceId?: string | null;
+  /** Prior preview fingerprint for relatedness check. */
+  priorPreviewFingerprint?: string | null;
+  /** Preview bytes (before overwrite) for relatedness — optional. */
+  priorPreviewBytes?: Uint8Array | null;
+  /**
+   * True when preview KV was derived as a truncate/cap of THIS full master
+   * in the same publish transaction (by construction).
+   */
+  previewDerivedFromFull?: boolean;
+  /** True when a separate full recompose replaced an unrelated preview take. */
+  parallelFullRecompose?: boolean;
+  /** Gate mode: preview publish vs full/promote. */
+  gatePhase?: "preview" | "full" | "promote";
 };
 
 function fail(
@@ -733,6 +761,172 @@ export function runPreviewAcceptanceGate(
     );
   }
 
+
+  // --- Elon / Joseph ONE-master (SHIP, not optional) ---
+  {
+    const phase = input.gatePhase || "preview";
+    const srcId = (input.masterSourceId || "").trim();
+    const priorId = (input.priorMasterSourceId || "").trim();
+    const parallel = Boolean(input.parallelFullRecompose);
+    const derived = Boolean(input.previewDerivedFromFull);
+
+    if (phase === "preview") {
+      if (!srcId) {
+        proofs.push(
+          fail(
+            "elon_same_master_source_id",
+            "Preview publish missing masterSourceId — mint from published bytes.",
+          ),
+        );
+      } else {
+        proofs.push(
+          ok(
+            "elon_same_master_source_id",
+            `Preview masterSourceId=${srcId}`,
+            { masterSourceId: srcId },
+          ),
+        );
+      }
+      // Preview-only: full-extends + refuse-parallel are N/A until full exists.
+      proofs.push(
+        ok(
+          "elon_full_extends_preview_master",
+          "N/A at preview phase — full not published yet.",
+          { phase },
+        ),
+      );
+      proofs.push(
+        ok(
+          "elon_refuse_parallel_full_recompose",
+          "N/A at preview phase — no full recompose yet.",
+          { phase },
+        ),
+      );
+    } else {
+      // full / promote
+      if (!srcId) {
+        proofs.push(
+          fail(
+            "elon_same_master_source_id",
+            "Full/promote missing masterSourceId.",
+          ),
+        );
+      } else if (priorId && priorId !== srcId && !derived) {
+        proofs.push(
+          fail(
+            "elon_same_master_source_id",
+            `Full masterSourceId ${srcId} ≠ preview ${priorId} and preview was not re-derived from full.`,
+            { masterSourceId: srcId, priorMasterSourceId: priorId },
+          ),
+        );
+      } else {
+        proofs.push(
+          ok(
+            "elon_same_master_source_id",
+            derived && priorId && priorId !== srcId
+              ? `Preview re-derived from full; masterSourceId now ${srcId} (was ${priorId}).`
+              : `Shared masterSourceId=${srcId}`,
+            { masterSourceId: srcId, priorMasterSourceId: priorId || null, derived },
+          ),
+        );
+      }
+
+      if (parallel && !derived) {
+        proofs.push(
+          fail(
+            "elon_refuse_parallel_full_recompose",
+            "Parallel full recompose without replacing preview from that full master — product FAIL (Joseph ONE-master).",
+          ),
+        );
+        proofs.push(
+          fail(
+            "elon_full_extends_preview_master",
+            "Full does not extend/match preview master (parallel render).",
+          ),
+        );
+      } else if (derived) {
+        proofs.push(
+          ok(
+            "elon_refuse_parallel_full_recompose",
+            "Preview KV overwritten/capped from this full master — dual-take cleared.",
+          ),
+        );
+        proofs.push(
+          ok(
+            "elon_full_extends_preview_master",
+            "Preview derived as cap/overwrite of full master (same take by construction).",
+          ),
+        );
+      } else {
+        // Byte relatedness when both available
+        const prev = input.priorPreviewBytes;
+        const fullBytes = publishedBytes;
+        if (prev && fullBytes && prev.byteLength > 512 && fullBytes.byteLength > 512) {
+          const headN = Math.min(48_000, prev.byteLength, fullBytes.byteLength);
+          let same = 0;
+          for (let i = 0; i < headN; i += 1) if (prev[i] === fullBytes[i]) same += 1;
+          const ratio = headN ? same / headN : 0;
+          if (ratio >= 0.98 || (priorId && priorId === srcId && ratio >= 0.5)) {
+            proofs.push(
+              ok(
+                "elon_full_extends_preview_master",
+                `Full extends/matches preview head (${(ratio * 100).toFixed(1)}%).`,
+                { ratio },
+              ),
+            );
+            proofs.push(
+              ok(
+                "elon_refuse_parallel_full_recompose",
+                "No parallel full recompose detected.",
+              ),
+            );
+          } else {
+            proofs.push(
+              fail(
+                "elon_full_extends_preview_master",
+                `Full vs preview head match only ${(ratio * 100).toFixed(1)}% — not same take.`,
+                { ratio },
+              ),
+            );
+            proofs.push(
+              fail(
+                "elon_refuse_parallel_full_recompose",
+                "Suspected parallel full recompose — refuse or overwrite preview from full.",
+              ),
+            );
+          }
+        } else if (priorId && priorId === srcId) {
+          proofs.push(
+            ok(
+              "elon_full_extends_preview_master",
+              "Same masterSourceId retained for full.",
+            ),
+          );
+          proofs.push(
+            ok(
+              "elon_refuse_parallel_full_recompose",
+              "Same masterSourceId — not a parallel swap.",
+            ),
+          );
+        } else {
+          proofs.push(
+            fail(
+              "elon_full_extends_preview_master",
+              "Cannot prove full extends preview (missing prior bytes/id and not derived).",
+            ),
+          );
+          proofs.push(
+            fail(
+              "elon_refuse_parallel_full_recompose",
+              "Cannot prove full is not a parallel recompose.",
+            ),
+          );
+        }
+      }
+    }
+  }
+
+
   // Dedupe by id (keep first)
   const seen = new Set<string>();
   const deduped: PreviewGateProof[] = [];
@@ -742,23 +936,17 @@ export function runPreviewAcceptanceGate(
     deduped.push(p);
   }
 
-  // Mandatory vs advisory:
-  // - Karaoke sync proofs deferred (Joseph lock) — already marked ok above.
-  // - MC-owned ear + intelligibility stay recorded but do NOT block candidate publish
-  //   (need a live URL for MC ear). Product DONE still owned by Master Chief only.
-  const ADVISORY_PROOF_IDS = new Set<PreviewGateProofId>([
-    "einstein_intelligibility",
-    "elon_cold_link_ear_checklist",
-  ]);
-
+  // Elon NO-GO: pass MUST NOT be true while intelligibility OR cold-link ear is false.
+  // Empty failures[] while any proof.pass===false is FORBIDDEN — list every failed proof.
+  // Karaoke sync proofs remain deferred (Joseph lock) via ok() above; they do not lie.
+  // Product DONE still owned by Master Chief / Joseph ear — this flag is code honesty only.
   const failures = deduped
     .filter((p) => !p.pass)
     .map((p) => ({ id: p.id, reason: p.reason }));
-  const blockingFailures = failures.filter((f) => !ADVISORY_PROOF_IDS.has(f.id));
 
   return {
-    pass: blockingFailures.length === 0,
-    failures: blockingFailures,
+    pass: failures.length === 0,
+    failures,
     proofs: deduped,
     checkedAt: new Date().toISOString(),
     jobId: input.job.id,
@@ -769,7 +957,23 @@ export function runPreviewAcceptanceGate(
     equalSliced,
     singleComposeSource: input.singleComposeSource && !input.dualComposeUsed,
     provider: input.provider,
+    masterSourceId: input.masterSourceId || null,
+    masterFingerprint: input.masterFingerprint || null,
   };
+}
+
+
+/** Proofs that may stay FAIL until MC ear / ASR — still counted in pass/failures. */
+export const EAR_PENDING_PROOF_IDS = new Set<PreviewGateProofId>([
+  "einstein_intelligibility",
+  "elon_cold_link_ear_checklist",
+]);
+
+/** Failures that mean bad/mismatched audio — block writing public bytes. */
+export function codeBlockingFailures(
+  result: PreviewGateResult,
+): Array<{ id: PreviewGateProofId; reason: string }> {
+  return result.failures.filter((f) => !EAR_PENDING_PROOF_IDS.has(f.id));
 }
 
 /** Throw with structured message when gate fails (blocks previewReady). */

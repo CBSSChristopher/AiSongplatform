@@ -40,6 +40,13 @@ export type SongJob = {
   paidAt: string | null;
   /** Encoded full-master duration (WAV PCM seconds). Authoritative for lyric fit. */
   audioDurationSec: number | null;
+  /**
+   * Joseph ONE-master: shared compose/source id for preview + paid full.
+   * Minted on first published master; promote/full must keep or re-derive preview from full.
+   */
+  masterSourceId: string | null;
+  /** Head fingerprint of the published master (audit / relatedness). */
+  masterFingerprint: string | null;
   whopPaymentId: string | null;
   checkoutSessionId: string | null;
 };
