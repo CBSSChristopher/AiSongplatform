@@ -3,8 +3,9 @@ import { readXingInfo, mp3XingMismatch } from "./mp3";
 
 /**
  * Authoritative full-master duration for lyric fit.
- * Prefer WAV PCM sample count; only trust Xing when it agrees with bytes
- * (never use lying Xing alone).
+ * Prefer honest MP3 Xing (what the gift player actually plays) when present;
+ * WAV PCM when Xing missing/lying. If WAV is longer than honest Xing by a
+ * small silent tail, keep Xing (do not stretch cues into padding).
  */
 export async function resolveEncodedFullDurationSec(input: {
   wav?: Uint8Array | null;
@@ -28,23 +29,33 @@ export async function resolveEncodedFullDurationSec(input: {
   }
 
   let xingSec = 0;
+  let xingHonest = false;
   if (input.mp3 && input.mp3.byteLength > 512) {
     if (!mp3XingMismatch(input.mp3)) {
       xingSec = readXingInfo(input.mp3)?.durationSec || 0;
+      xingHonest = xingSec > 1;
     }
   }
 
   const cueEnd = input.cues?.length ? cueSpanEnd(input.cues) : 0;
 
-  // Prefer WAV PCM (true sample count).
-  if (wavSec > 1) return wavSec;
-  if (stored > 1) return stored;
-  // Xing only when consistent with cue span OR no cues yet.
-  if (xingSec > 1) {
-    if (!(cueEnd > 0.5) || Math.abs(xingSec - cueEnd) <= 8) return xingSec;
-    // Xing disagrees badly with cues — distrust; fall through.
+  // Honest Xing that agrees with (or is shorter than) WAV → gift MP3 truth.
+  if (xingHonest) {
+    if (!(wavSec > 1) || xingSec <= wavSec + 0.5) {
+      // Allow WAV slightly shorter (encode roundtrip); distrust only if Xing >> WAV (lie).
+      if (!(wavSec > 1) || xingSec <= wavSec + 2.5) {
+        return xingSec;
+      }
+    }
   }
+
+  if (wavSec > 1) return wavSec;
+  if (stored > 1) {
+    // Prefer stored when it agrees with cue span / honest xing.
+    if (!(cueEnd > 0.5) || Math.abs(stored - cueEnd) <= 8) return stored;
+  }
+  if (xingHonest) return xingSec;
   if (cueEnd > 0.5) return cueEnd;
-  if (xingSec > 1) return xingSec;
+  if (stored > 1) return stored;
   return 0;
 }

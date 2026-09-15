@@ -14,10 +14,14 @@ export async function POST(
   const secret = process.env.REPAIR_SECRET || process.env.ADMIN_REPAIR_SECRET || "";
   const header = request.headers.get("x-repair-secret") || "";
   const force = Boolean(secret && header && header === secret);
+  const body = (await request.json().catch(() => ({}))) as {
+    targetDurationSec?: number;
+    forceRescale?: boolean;
+  };
 
   const mp3 = await readAudio(id, "full", "mp3");
   const wav = await readAudio(id, "full", "wav");
-  const durationSec = await resolveEncodedFullDurationSec({
+  let durationSec = await resolveEncodedFullDurationSec({
     wav,
     mp3,
     storedSec: job.audioDurationSec,
@@ -26,9 +30,20 @@ export async function POST(
   if (!(durationSec > 1)) {
     return NextResponse.json({ error: "Could not read full audio duration." }, { status: 400 });
   }
+  if (
+    force &&
+    typeof body.targetDurationSec === "number" &&
+    body.targetDurationSec > 1
+  ) {
+    durationSec = body.targetDurationSec;
+  }
 
   const before = cueSpanEnd(job.lyricCues || []);
-  if (!force && !cuesNeedRescale(job.lyricCues || [], durationSec, 2)) {
+  const needsFit =
+    Boolean(force && body.forceRescale) ||
+    cuesNeedRescale(job.lyricCues || [], durationSec, 2);
+  // Secret unlocks repair on locked jobs; it must NOT stretch cues that already fit.
+  if (!needsFit) {
     const next =
       job.audioDurationSec && Math.abs(job.audioDurationSec - durationSec) < 0.5
         ? job
@@ -36,10 +51,14 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       healed: false,
+      forced: force,
       audioDurationSec: durationSec,
       cueEndSec: before,
       job: publicJob(next || job),
     });
+  }
+  if (!force && job.paidAt && job.fullReady) {
+    // Public heal allowed (same as song page); continue.
   }
 
   const nextCues = rescaleCuesToDuration(job.lyricCues || [], durationSec);

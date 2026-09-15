@@ -459,7 +459,13 @@ export async function writeFullAudio(job: SongJob) {
   let cues = rendered.cues || [];
   let audioDurationSec = 0;
   try {
+    const { resolveEncodedFullDurationSec } = await import("./true-duration");
     const dur =
+      (await resolveEncodedFullDurationSec({
+        wav: rendered.wav,
+        mp3: gate.mp3Ok ? rendered.mp3 : null,
+        cues,
+      })) ||
       audioDurationSeconds(rendered.wav) ||
       cueSpanEnd(cues) ||
       0;

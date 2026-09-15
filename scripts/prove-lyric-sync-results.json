@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-15T05:50:04.014Z",
+  "checkedAt": "2026-09-15T05:52:39.991Z",
   "results": [
     {
       "id": "6a0a92af-ae93-45d8-a9f3-56053a123acf",
@@ -33,7 +33,7 @@
       "voice": "male",
       "title": "Happy Birthday, Maliya",
       "xingDur": 85.02857142857142,
-      "cueEnd": 85.02857099999999,
+      "cueEnd": 85.02857142857142,
       "trueDur": 85.02857142857142,
       "lastCueEnd": 85.02857142857142,
       "samples": [
