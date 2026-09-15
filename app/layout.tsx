@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { brand } from "@/lib/brand";
+import { SeoJsonLd } from "@/components/SeoJsonLd";
 import "./globals.css";
 
 const serif = Fraunces({
@@ -54,7 +55,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} h-full`}>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased">
+        <SeoJsonLd />
+        {children}
+      </body>
     </html>
   );
 }
